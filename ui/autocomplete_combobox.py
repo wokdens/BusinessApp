@@ -1,144 +1,330 @@
 import tkinter as tk
+from tkinter import ttk
 
 
 class AutocompleteCombobox(tk.Frame):
+    """
+    A modern, user-friendly Autocomplete Combobox with:
+    - Floating overlay dropdown (Zero layout displacement / no pushing other elements)
+    - Integrated vertical scrollbar for large product/customer lists
+    - Full keyboard navigation (Down/Up arrow navigation, Enter to select, Escape to close)
+    - Mouse hover live selection and single-click pick
+    - Multi-word search matching (e.g. '2.5 wire' matches 'Polycab 2.5 sq mm Wire')
+    """
 
-    def __init__(self, parent, width=30):
-
+    def __init__(self, parent, width=30, placeholder="", font=("Arial", 11)):
         super().__init__(parent)
 
         self.completion_list = []
+        self.current_matches = []
+        self.placeholder = placeholder
+        self._font = font
 
-        # Entry
+        # Main Entry Field
         self.entry = tk.Entry(
             self,
-            width=width
+            width=width,
+            font=font,
+            relief="solid",
+            bd=1,
+            bg="#ffffff",
+            fg="#212529"
         )
+        self.entry.pack(fill="x", expand=True, ipady=6)
 
-        self.entry.pack(fill="x", ipady=8)
+        # Fallback dummy listbox to avoid AttributeError on legacy config calls
+        self.listbox = tk.Listbox(self)
+        self.popup = None
+        self.scrollbar = None
+        self._listbox_font = font
 
-        # Listbox
-        self.listbox = tk.Listbox(
-            self,
-            height=5
-        )
+        # Key & Mouse Bindings on Entry
+        self.entry.bind("<KeyRelease>", self._on_key_release)
+        self.entry.bind("<Down>", self._on_down_arrow)
+        self.entry.bind("<Up>", self._on_up_arrow)
+        self.entry.bind("<Return>", self._on_enter_pressed)
+        self.entry.bind("<KP_Enter>", self._on_enter_pressed)
+        self.entry.bind("<Escape>", lambda e: self.hide_popup())
+        self.entry.bind("<FocusOut>", self._on_entry_focus_out)
+        self.entry.bind("<Button-1>", self._on_entry_clicked)
 
-        self.listbox.pack_forget()
-
-        # Events
-        self.entry.bind(
-            "<KeyRelease>",
-            self.check_input
-        )
-
-        self.listbox.bind(
-            "<<ListboxSelect>>",
-            self.select_item
-        )
 
     # =========================
-    # SET DATA
+    # PUBLIC API & PROPERTIES
     # =========================
 
     def set_completion_list(self, completion_list):
+        """Set or update the list of items for autocomplete."""
+        self.completion_list = [str(item) for item in completion_list if item is not None]
 
-        self.completion_list = sorted(
-            completion_list,
-            key=str.lower
-        )
+    def get(self):
+        """Get the current text in the entry."""
+        return self.entry.get()
+
+    def set(self, value):
+        """Set the text in the entry."""
+        self.entry.delete(0, tk.END)
+        if value:
+            self.entry.insert(0, str(value))
+        self.hide_popup()
+
+    def focus_set(self):
+        """Focus the entry."""
+        self.entry.focus_set()
 
     # =========================
-    # FILTER
+    # POPUP WINDOW MANAGEMENT
     # =========================
 
-    def check_input(self, event):
-
-        typed = self.entry.get().lower()
-
-        # Clear listbox
-        self.listbox.delete(
-            0,
-            tk.END
-        )
-
-        if typed == "":
-
-            self.listbox.pack_forget()
-
+    def _create_popup(self):
+        """Create the floating borderless popup window."""
+        if self.popup and self.popup.winfo_exists():
             return
 
+        self.popup = tk.Toplevel(self)
+        self.popup.wm_overrideredirect(True)
+        self.popup.wm_attributes("-topmost", True)
+
+        container = tk.Frame(
+            self.popup,
+            bd=1,
+            relief="solid",
+            bg="#0066cc"
+        )
+        container.pack(fill="both", expand=True)
+
+        inner = tk.Frame(container, bg="#ffffff")
+        inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+        self.scrollbar = ttk.Scrollbar(inner, orient="vertical")
+        self.listbox = tk.Listbox(
+            inner,
+            font=self._listbox_font,
+            selectmode="single",
+            bg="#ffffff",
+            fg="#212529",
+            selectbackground="#0078d7",
+            selectforeground="#ffffff",
+            activestyle="none",
+            highlightthickness=0,
+            bd=0,
+            yscrollcommand=self.scrollbar.set
+        )
+        self.scrollbar.config(command=self.listbox.yview)
+
+        self.scrollbar.pack(side="right", fill="y")
+        self.listbox.pack(side="left", fill="both", expand=True)
+
+        # Listbox Bindings
+        self.listbox.bind("<ButtonRelease-1>", self._on_listbox_select)
+        self.listbox.bind("<Return>", self._on_listbox_enter)
+        self.listbox.bind("<KP_Enter>", self._on_listbox_enter)
+        self.listbox.bind("<Escape>", lambda e: self.hide_popup(focus_entry=True))
+        self.listbox.bind("<Up>", self._on_listbox_up)
+        self.listbox.bind("<Motion>", self._on_mouse_motion)
+        self.listbox.bind("<FocusOut>", self._on_listbox_focus_out)
+
+    def show_popup(self, matches):
+        """Show the floating popup positioned right below the entry."""
+        if not matches:
+            self.hide_popup()
+            return
+
+        self.current_matches = matches
+        self._create_popup()
+
+        # Update Listbox Items
+        self.listbox.delete(0, tk.END)
+        for item in matches:
+            self.listbox.insert(tk.END, item)
+
+        # Highlight first match by default
+        self.listbox.selection_set(0)
+        self.listbox.activate(0)
+
+        # Calculate exact geometry
+        self.update_idletasks()
+        try:
+            x = self.entry.winfo_rootx()
+            y = self.entry.winfo_rooty() + self.entry.winfo_height() + 2
+            w = max(self.entry.winfo_width(), 260)
+            items_count = min(len(matches), 7)
+            h = items_count * 28 + 6
+
+            # Ensure within screen bounds
+            screen_h = self.winfo_screenheight()
+            if y + h > screen_h - 40:
+                y = self.entry.winfo_rooty() - h - 2
+
+            self.popup.geometry(f"{w}x{h}+{x}+{y}")
+            self.popup.deiconify()
+            self.popup.lift()
+        except Exception:
+            pass
+
+    def hide_popup(self, focus_entry=False):
+        """Hide the floating popup."""
+        if self.popup and self.popup.winfo_exists():
+            self.popup.withdraw()
+        if focus_entry:
+            self.entry.focus_set()
+
+    # =========================
+    # EVENT HANDLERS
+    # =========================
+
+    def _on_key_release(self, event):
+        """Filter matches as the user types."""
+        # Ignore navigation keys that are handled separately
+        if event.keysym in ("Up", "Down", "Return", "KP_Enter", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
+            return
+
+        typed = self.entry.get().strip().lower()
+        if not typed:
+            self.hide_popup()
+            self._notify_change()
+            return
+
+        # Smart Multi-Word Search (e.g., '2.5 wire' matches 'Polycab 2.5 sq mm Wire')
+        search_terms = typed.split()
         matches = []
-
         for item in self.completion_list:
-
-            if typed in item.lower():
-
+            item_lower = item.lower()
+            if all(term in item_lower for term in search_terms):
                 matches.append(item)
 
         if matches:
-
-            self.listbox.pack(
-                fill="x"
-            )
-
-            for item in matches:
-
-                self.listbox.insert(
-                    tk.END,
-                    item
-                )
-
+            self.show_popup(matches)
         else:
+            self.hide_popup()
 
-            self.listbox.pack_forget()
+        self._notify_change()
 
-    # =========================
-    # SELECT
-    # =========================
+    def _on_entry_clicked(self, event):
+        """Open all or filtered items on click."""
+        typed = self.entry.get().strip().lower()
+        if typed:
+            search_terms = typed.split()
+            matches = [
+                item for item in self.completion_list
+                if all(t in item.lower() for t in search_terms)
+            ]
+            if matches:
+                self.show_popup(matches)
+        elif self.completion_list:
+            self.show_popup(self.completion_list[:30])
 
-    def select_item(self, event):
+    def _on_down_arrow(self, event):
+        """Move from entry into popup listbox."""
+        if self.popup and self.popup.winfo_exists() and self.popup.winfo_viewable():
+            if self.listbox:
+                self.listbox.focus_set()
+                sel = self.listbox.curselection()
+                cur = sel[0] if sel else 0
+                nxt = min(cur + 1, self.listbox.size() - 1)
+                self.listbox.selection_clear(0, tk.END)
+                self.listbox.selection_set(nxt)
+                self.listbox.activate(nxt)
+                self.listbox.see(nxt)
+            return "break"
+        else:
+            # Open popup with all items if available
+            typed = self.entry.get().strip().lower()
+            if typed:
+                matches = [item for item in self.completion_list if typed in item.lower()]
+                if matches:
+                    self.show_popup(matches)
+            elif self.completion_list:
+                self.show_popup(self.completion_list[:30])
+            return "break"
 
-        selected = self.listbox.curselection()
+    def _on_up_arrow(self, event):
+        """Navigate up."""
+        if self.popup and self.popup.winfo_exists() and self.popup.winfo_viewable():
+            if self.listbox:
+                sel = self.listbox.curselection()
+                if sel and sel[0] > 0:
+                    prev_idx = sel[0] - 1
+                    self.listbox.selection_clear(0, tk.END)
+                    self.listbox.selection_set(prev_idx)
+                    self.listbox.activate(prev_idx)
+                    self.listbox.see(prev_idx)
+                else:
+                    self.entry.focus_set()
+            return "break"
 
-        if not selected:
-            return
+    def _on_listbox_up(self, event):
+        """If on top item of listbox, return focus to entry."""
+        sel = self.listbox.curselection()
+        if sel and sel[0] == 0:
+            self.entry.focus_set()
+            return "break"
 
-        value = self.listbox.get(
-            selected[0]
-        )
+    def _on_enter_pressed(self, event):
+        """Enter key on entry: select first match if popup is visible."""
+        if self.popup and self.popup.winfo_exists() and self.popup.winfo_viewable() and self.listbox:
+            sel = self.listbox.curselection()
+            if sel:
+                val = self.listbox.get(sel[0])
+                self.set(val)
+                self._notify_change()
+                return "break"
+            elif self.current_matches:
+                self.set(self.current_matches[0])
+                self._notify_change()
+                return "break"
+        self.hide_popup()
 
-        self.entry.delete(
-            0,
-            tk.END
-        )
+    def _on_listbox_enter(self, event):
+        """Enter key on listbox: select and return to entry."""
+        sel = self.listbox.curselection()
+        if sel:
+            val = self.listbox.get(sel[0])
+            self.set(val)
+            self._notify_change()
+        self.hide_popup(focus_entry=True)
+        return "break"
 
-        self.entry.insert(
-            0,
-            value
-        )
+    def _on_listbox_select(self, event):
+        """Mouse click on listbox item."""
+        sel = self.listbox.curselection()
+        if sel:
+            val = self.listbox.get(sel[0])
+            self.set(val)
+            self._notify_change()
+        self.hide_popup(focus_entry=True)
 
-        self.listbox.pack_forget()
+    def _on_mouse_motion(self, event):
+        """Hover highlight item in listbox."""
+        if self.listbox:
+            idx = self.listbox.nearest(event.y)
+            if 0 <= idx < self.listbox.size():
+                self.listbox.selection_clear(0, tk.END)
+                self.listbox.selection_set(idx)
+                self.listbox.activate(idx)
 
-    # =========================
-    # GET VALUE
-    # =========================
+    def _on_entry_focus_out(self, event):
+        """Close popup when focus leaves after a short delay (allows mouse clicks to register)."""
+        self.after(180, self._check_focus_loss)
 
-    def get(self):
+    def _on_listbox_focus_out(self, event):
+        """Close popup when listbox loses focus."""
+        self.after(180, self._check_focus_loss)
 
-        return self.entry.get()
+    def _check_focus_loss(self):
+        """Verify if neither entry nor listbox has focus before hiding popup."""
+        try:
+            focused = self.focus_get()
+            if focused not in (self.entry, self.listbox, self.scrollbar):
+                self.hide_popup()
+        except Exception:
+            self.hide_popup()
 
-    # =========================
-    # SET VALUE
-    # =========================
+    def _notify_change(self):
+        """Emit ComboboxSelected and KeyRelease events to trigger autofill listeners."""
+        try:
+            self.event_generate("<<ComboboxSelected>>")
+            self.entry.event_generate("<KeyRelease>")
+        except Exception:
+            pass
 
-    def set(self, value):
-
-        self.entry.delete(
-            0,
-            tk.END
-        )
-
-        self.entry.insert(
-            0,
-            value
-        )
