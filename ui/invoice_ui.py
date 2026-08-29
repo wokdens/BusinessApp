@@ -983,49 +983,37 @@ class InvoiceUI:
         page_width, page_height = 595.27, 841.89  # Standard A4
 
         # =====================================
-        # TITLE & SHOP HEADER
+        # HEADER (ESTIMATE ONLY - NO SHOP DETAILS)
         # =====================================
-        from database import get_shop_details
-        shop = get_shop_details()
-
-        # Shop Name
+        # Main Heading (ESTIMATE)
         pdf.setFont("Helvetica-Bold", 16)
         pdf.setFillColorRGB(0.12, 0.14, 0.18)
-        pdf.drawString(40, 805, str(shop["name"]))
+        pdf.drawString(40, 805, "ESTIMATE")
 
-        # Shop Details Subtitle
-        pdf.setFont("Helvetica", 8.5)
-        pdf.setFillColorRGB(0.35, 0.38, 0.42)
-        pdf.drawString(40, 792, f"{shop['address']}  |  Phone: {shop['phone']}")
-
-        # Header Badge (Right)
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.setFillColorRGB(0.18, 0.32, 0.58)
-        pdf.drawRightString(555, 805, "TAX INVOICE / ESTIMATE")
-
+        # Date / Time (Right)
         pdf.setFont("Helvetica", 9)
         pdf.setFillColorRGB(0.35, 0.38, 0.42)
-        pdf.drawRightString(555, 792, f"Date: {datetime.now().strftime('%d-%m-%Y  %I:%M %p')}")
+        pdf.drawRightString(555, 805, f"Date: {datetime.now().strftime('%d-%m-%Y  %I:%M %p')}")
 
         # Top Divider Line
         pdf.setStrokeColorRGB(0.8, 0.83, 0.88)
         pdf.setLineWidth(1)
-        pdf.line(40, 780, 555, 780)
+        pdf.line(40, 792, 555, 792)
 
         # =====================================
-        # INVOICE & CUSTOMER INFO BOX
+        # ESTIMATE & CUSTOMER INFO
         # =====================================
         pdf.setFont("Helvetica-Bold", 9.5)
         pdf.setFillColorRGB(0.2, 0.2, 0.2)
-        pdf.drawString(40, 763, f"Invoice No : INV-{invoice_number}")
+        pdf.drawString(40, 775, f"Estimate No : INV-{invoice_number}")
 
         pdf.setFont("Helvetica-Bold", 9.5)
-        pdf.drawString(280, 763, f"Customer : {customer_name.upper()}")
+        pdf.drawString(280, 775, f"Customer : {customer_name.upper()}")
 
         # =====================================
         # TABLE HEADER (Modern Slate Header)
         # =====================================
-        table_top = 745
+        table_top = 758
         header_height = 20
 
         # Background fill for header
@@ -1072,7 +1060,7 @@ class InvoiceUI:
             row_height = 16 if lines_count <= 1 else (lines_count * 11 + 5)
 
             # Check for page overflow
-            if current_y - row_height < 110:
+            if current_y - row_height < 90:
                 pdf.showPage()
                 current_y = 800
                 pdf.setFont("Helvetica", 8.5)
@@ -1149,7 +1137,7 @@ class InvoiceUI:
         # =====================================
         # SUMMARY SECTION (TOTAL ONLY - NO PENDING/PAID)
         # =====================================
-        summary_y = table_bottom - 18
+        summary_y = table_bottom - 16
 
         # Left Remarks / Note
         note_str = getattr(self, "note_text", None)
@@ -1160,9 +1148,9 @@ class InvoiceUI:
             pdf.drawString(45, summary_y - 2, f"Note / Remarks: {note_val}")
 
         # Grand Total Box (Right Aligned Accent Box)
-        total_box_width = 200
-        total_box_height = 32
-        total_box_x = 355
+        total_box_width = 190
+        total_box_height = 30
+        total_box_x = 365
         total_box_y = summary_y - total_box_height + 10
 
         pdf.setFillColorRGB(0.94, 0.96, 1.0)
@@ -1173,39 +1161,28 @@ class InvoiceUI:
 
         pdf.setFont("Helvetica-Bold", 12)
         pdf.setFillColorRGB(0.1, 0.2, 0.5)
-        pdf.drawRightString(total_box_x + total_box_width - 10, total_box_y + 10, f"Grand Total:  Rs. {grand_total:,.2f}")
+        pdf.drawRightString(total_box_x + total_box_width - 10, total_box_y + 9, f"Grand Total:  Rs. {grand_total:,.2f}")
 
         # =====================================
-        # FOOTER & AUTHORIZED SIGNATURE
+        # MANDATORY FOOTER & BRANDING
         # =====================================
-        footer_y = max(35, total_box_y - 50)
-
-        pdf.setFont("Helvetica", 7.5)
-        pdf.setFillColorRGB(0.4, 0.4, 0.4)
-        pdf.drawString(40, footer_y + 12, "• Terms: Goods once sold will not be returned without original bill.")
-        pdf.drawString(40, footer_y + 2, "• Subject to local shop jurisdiction.")
-
-        # Signatory
-        pdf.setFont("Helvetica-Bold", 8)
-        pdf.setFillColorRGB(0.2, 0.2, 0.2)
-        pdf.drawRightString(555, footer_y + 12, f"For {shop['name']}")
-        pdf.setFont("Helvetica", 7.5)
-        pdf.drawRightString(555, footer_y + 2, "Authorized Signatory")
-
-        # Bottom Branding
+        # Bottom Divider Line
         pdf.setStrokeColorRGB(0.85, 0.88, 0.92)
         pdf.setLineWidth(0.5)
-        pdf.line(40, 22, 555, 22)
+        pdf.line(40, 26, 555, 26)
 
-        pdf.setFont("Helvetica", 7.5)
-        pdf.setFillColorRGB(0.45, 0.45, 0.45)
-        pdf.drawString(40, 12, "Thank you for your business!")
-
-        pdf.setFont("Helvetica-Bold", 7.5)
+        # Left: Mandatory PO / GST line
+        pdf.setFont("Helvetica", 8)
         pdf.setFillColorRGB(0.35, 0.35, 0.35)
-        pdf.drawRightString(555, 12, "⚡ Powered by wokdens.com")
+        pdf.drawString(40, 14, "GST as per applicable. Order against PO.")
+
+        # Right: Powered by wokdens.com
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.setFillColorRGB(0.35, 0.35, 0.35)
+        pdf.drawRightString(555, 14, "⚡ Powered by wokdens.com")
 
         pdf.save()
+
 
 
 
