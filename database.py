@@ -1344,13 +1344,13 @@ def get_customers_with_pending():
 
     cursor.execute("""
     SELECT
-        customers.name,
+        COALESCE(NULLIF(TRIM(customers.name), ''), 'Unnamed Customer') as cust_name,
         SUM(invoices.pending) as total_pending,
         COUNT(invoices.id) as invoice_count
     FROM customers
     JOIN invoices ON customers.id = invoices.customer_id
     WHERE invoices.pending > 0
-    GROUP BY customers.id, customers.name
+    GROUP BY customers.id, cust_name
     ORDER BY total_pending DESC
     """)
 
@@ -1375,13 +1375,14 @@ def get_customer_invoices(customer_name):
         COALESCE(invoices.note, '')
     FROM invoices
     JOIN customers ON invoices.customer_id = customers.id
-    WHERE customers.name = ?
+    WHERE COALESCE(NULLIF(TRIM(customers.name), ''), 'Unnamed Customer') = ? OR customers.name = ?
     ORDER BY invoices.id DESC
-    """, (customer_name,))
+    """, (customer_name, customer_name))
 
     data = cursor.fetchall()
     conn.close()
     return data
+
 
 
 def update_invoice_payment(invoice_id, new_paid_amount):

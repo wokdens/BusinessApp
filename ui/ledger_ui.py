@@ -81,6 +81,18 @@ class LedgerUI:
         self.search_entry.pack(side="left", padx=10)
         self.search_entry.bind("<KeyRelease>", self.search_customers)
 
+        open_ledger_btn = tk.Button(
+            search_frame,
+            text="📂 View Invoices (Enter)",
+            command=self.on_customer_select,
+            bg="#0066cc",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=10,
+            pady=3
+        )
+        open_ledger_btn.pack(side="right", padx=5)
+
         export_ledger_btn = tk.Button(
             search_frame,
             text="📊 Export Ledger CSV",
@@ -148,6 +160,8 @@ class LedgerUI:
         self.customer_tree.tag_configure("oddrow", background="#f8f9fa")
 
         self.customer_tree.bind("<Double-1>", self.on_customer_select)
+        self.customer_tree.bind("<Return>", self.on_customer_select)
+        self.customer_tree.bind("<ButtonRelease-1>", self.on_customer_select)
 
         # Load data
         self.all_customers = []
@@ -176,17 +190,29 @@ class LedgerUI:
                 self.customer_tree.insert("", "end", values=values, tags=(tag,))
                 match_count += 1
 
+    def on_customer_select(self, event=None):
+        """Handle customer selection on click, double-click, or Enter key"""
+        if event and hasattr(event, "y"):
+            region = self.customer_tree.identify("region", event.x, event.y)
+            if region not in ("cell", "tree"):
+                return
+            row_id = self.customer_tree.identify_row(event.y)
+            if row_id:
+                self.customer_tree.selection_set(row_id)
 
-    def on_customer_select(self, event):
-        """Handle customer selection"""
         selected = self.customer_tree.selection()
         if not selected:
             return
 
-        values = self.customer_tree.item(selected)["values"]
-        customer_name = values[0]
+        item_data = self.customer_tree.item(selected[0])
+        values = item_data.get("values", [])
+        if not values or len(values) == 0:
+            return
+
+        customer_name = str(values[0])
         self.selected_customer = customer_name
         self.show_invoice_list(customer_name)
+
 
     def export_ledger_csv(self):
         """Exports the customer dues ledger to CSV (Admin PIN Protected)."""
@@ -661,29 +687,31 @@ class LedgerUI:
             messagebox.showerror("Error Generating Statement", str(e))
 
 
-    def toggle_invoice_filter(self):
-        """Toggle between showing all invoices and pending only"""
-        self.filter_pending_only = not self.filter_pending_only
-        
-        if self.filter_pending_only:
-            self.filter_btn.config(text="Show All Invoices")
-        else:
-            self.filter_btn.config(text="Show Pending Invoices Only")
-        
-        self.refresh_invoice_display()
+    def filter_invoices(self, event=None):
+        """Filter invoices based on search text and status filter (All, Pending, Paid)."""
+        search_kw = getattr(self, "invoice_search_entry", None)
+        keyword = search_kw.get().strip().lower() if search_kw else ""
+        status_filter = getattr(self, "status_filter_var", None)
+        status_val = status_filter.get() if status_filter else "All"
 
-    def refresh_invoice_display(self):
-        """Refresh invoice tree with current filter"""
         self.invoice_tree.delete(*self.invoice_tree.get_children())
 
         display_count = 0
-        for row in self.all_invoices:
+        for row in getattr(self, "all_invoices", []):
             invoice_id, invoice_number, date_str, total, paid, pending, note = row
-            
-            # Apply filter
-            if self.filter_pending_only and pending == 0:
+
+            # Status filter
+            if status_val == "Pending" and pending <= 0:
                 continue
-            
+            elif status_val == "Paid" and pending > 0:
+                continue
+
+            # Keyword filter (invoice number, date, note, amounts)
+            if keyword:
+                searchable_text = f"inv-{invoice_number} {date_str} {note or ''} {total} {paid} {pending}".lower()
+                if keyword not in searchable_text:
+                    continue
+
             status = "Pending" if pending > 0 else "Paid"
             values = (
                 f"INV-{invoice_number}",
@@ -692,11 +720,16 @@ class LedgerUI:
                 f"₹ {paid}",
                 f"₹ {pending}",
                 status,
-                note
+                note or ""
             )
             tag = "evenrow" if display_count % 2 == 0 else "oddrow"
             self.invoice_tree.insert("", "end", values=values, iid=invoice_id, tags=(tag,))
             display_count += 1
+
+    def refresh_invoice_display(self):
+        """Refresh invoice tree with current filter"""
+        self.filter_invoices()
+
 
 
     def on_invoice_double_click(self, event):
