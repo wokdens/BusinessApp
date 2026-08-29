@@ -9,11 +9,13 @@ from database import (
     get_connection,
     get_all_categories,
     add_category,
-    record_stock_adjustment
+    record_stock_adjustment,
+    record_audit_log
 )
 
 from ui.autocomplete_combobox import AutocompleteCombobox
 from ui.admin_auth_dialog import request_admin_pin, is_admin_mode
+
 
 
 
@@ -742,7 +744,7 @@ class InventoryUI:
 
         self.selling_entry.insert(0, values[5])
         
-        self.unit_entry.insert(0, values[6])
+        self.unit_entry.set(values[6] if len(values) > 6 else "Pcs")
         
         self.stock_entry.insert(0, values[7])
 
@@ -776,7 +778,7 @@ class InventoryUI:
             purchase_str = self.purchase_entry.get().strip()
             if purchase_str == "***":
                 orig_prod = getattr(self, "product_map", {}).get(self.selected_product_id)
-                purchase_val = float(orig_prod[4] if orig_prod else 0)
+                purchase_val = float(orig_prod[4] if (orig_prod and orig_prod[4]) else 0)
             else:
                 purchase_val = float(purchase_str or 0)
         except ValueError:
@@ -826,6 +828,10 @@ class InventoryUI:
         )
 
         self.load_products()
+
+        # Preserve active search filter if any
+        if self.search_entry.get().strip():
+            self.search_products(None)
 
         self.clear_form()
 
@@ -885,8 +891,10 @@ class InventoryUI:
             "Product deleted successfully"
         )
 
-
         self.load_products()
+
+        if self.search_entry.get().strip():
+            self.search_products(None)
 
         self.clear_form()
 
@@ -908,11 +916,12 @@ class InventoryUI:
 
         self.selling_entry.delete(0, tk.END)
         
-        self.unit_entry.delete(0, tk.END)
+        self.unit_entry.set("Pcs")
 
         self.stock_entry.delete(0, tk.END)
 
         self.discount_base_combo.set("Price")
+
 
     # =========================
     # CLEAR FORM
