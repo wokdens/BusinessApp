@@ -147,10 +147,10 @@ class InvoiceUI:
         for col in (1, 3, 5, 7):
             product_frame.grid_columnconfigure(col, weight=1)
 
-        # Row 0: Product Search Dropdown
+        # Row 0: Product Search Dropdown & Live Stock Badge
         tk.Label(
             product_frame,
-            text="Product:",
+            text="Product (F2):",
             font=("Arial", 11, "bold")
         ).grid(row=0, column=0, padx=6, pady=3, sticky="w")
 
@@ -163,10 +163,30 @@ class InvoiceUI:
         self.product_combo.grid(
             row=0,
             column=1,
-            columnspan=7,
+            columnspan=5,
             padx=4,
             pady=3,
             sticky="ew"
+        )
+
+        # Live Stock Indicator Badge
+        self.stock_badge = tk.Label(
+            product_frame,
+            text="Stock: --",
+            font=("Arial", 10, "bold"),
+            fg="#6c757d",
+            bg="#e9ecef",
+            padx=8,
+            pady=2,
+            relief="groove"
+        )
+        self.stock_badge.grid(
+            row=0,
+            column=6,
+            columnspan=2,
+            padx=6,
+            pady=3,
+            sticky="e"
         )
 
         products = get_product_names()
@@ -232,6 +252,30 @@ class InvoiceUI:
         )
 
         # =========================
+        # TALLY SEAMLESS KEYBOARD NAVIGATION LOOP
+        # =========================
+        self.customer_combo.entry.bind("<Return>", lambda e: self.product_combo.entry.focus_set())
+
+        # Auto-Select-All on FocusIn for rapid overwrite
+        for entry_w in (self.qty_entry, self.price_entry, self.discount_entry):
+            entry_w.bind("<FocusIn>", lambda e, w=entry_w: w.selection_range(0, tk.END))
+
+        # Enter advances to next field seamlessly
+        self.qty_entry.bind(
+            "<Return>",
+            lambda e: (self.price_entry.focus_set(), self.price_entry.selection_range(0, tk.END))
+        )
+        self.price_entry.bind(
+            "<Return>",
+            lambda e: (self.discount_entry.focus_set(), self.discount_entry.selection_range(0, tk.END))
+        )
+        self.discount_entry.bind(
+            "<Return>",
+            lambda e: self.add_to_cart()
+        )
+
+
+        # =========================
         # 3. CART TABLE WITH INTERNAL SCROLLBAR
         # =========================
 
@@ -294,6 +338,11 @@ class InvoiceUI:
             "<Button-1>",
             self.handle_table_click
         )
+        # Table Keyboard Shortcuts (Tally Style)
+        self.tree.bind("<Delete>", lambda e: self._delete_selected_cart_row())
+        self.tree.bind("<BackSpace>", lambda e: self._delete_selected_cart_row())
+        self.tree.bind("<Return>", lambda e: self._edit_selected_cart_row())
+        self.tree.bind("<F4>", lambda e: self._edit_selected_cart_row())
 
         # =========================
         # 4. BOTTOM SUMMARY & ACTIONS
@@ -314,9 +363,23 @@ class InvoiceUI:
             side="bottom"
         )
 
-        # Line 1: Grand Total, Paid Amount, Pending, Note (ALL in ONE Line)
+        # Line 1: Items Count, Grand Total, Paid Amount, Pending, Note (ALL in ONE Line)
         line1 = tk.Frame(bottom_frame, bg="#f8f9fa")
         line1.pack(fill="x", pady=2)
+
+        # Wholesale Quantity Counter Badge
+        self.items_count_label = tk.Label(
+            line1,
+            text="Items: 0 | Qty: 0",
+            font=("Arial", 10, "bold"),
+            fg="#495057",
+            bg="#e9ecef",
+            padx=6,
+            pady=2,
+            relief="groove"
+        )
+
+        self.items_count_label.pack(side="left", padx=(4, 10))
 
         self.total_label = tk.Label(
             line1,
@@ -325,18 +388,18 @@ class InvoiceUI:
             fg="#5634f0",
             bg="#f8f9fa"
         )
-        self.total_label.pack(side="left", padx=(4, 15))
+        self.total_label.pack(side="left", padx=(4, 12))
 
         tk.Label(
             line1,
             text="Paid Amount:",
             font=("Arial", 11, "bold"),
             bg="#f8f9fa"
-        ).pack(side="left", padx=(10, 4))
+        ).pack(side="left", padx=(8, 4))
 
         self.paid_entry = tk.Entry(
             line1,
-            width=12,
+            width=11,
             font=("Arial", 11, "bold"),
             justify="center"
         )
@@ -351,6 +414,14 @@ class InvoiceUI:
             "<FocusOut>",
             lambda e: self.update_pending()
         )
+        self.paid_entry.bind(
+            "<FocusIn>",
+            lambda e: self.paid_entry.selection_range(0, tk.END)
+        )
+        self.paid_entry.bind(
+            "<Return>",
+            lambda e: self.save_invoice()
+        )
 
         self.pending_label = tk.Label(
             line1,
@@ -359,21 +430,29 @@ class InvoiceUI:
             fg="#28a745",
             bg="#f8f9fa"
         )
-        self.pending_label.pack(side="left", padx=(15, 15))
+        self.pending_label.pack(side="left", padx=(12, 12))
 
         tk.Label(
             line1,
             text="Note:",
             font=("Arial", 11, "bold"),
             bg="#f8f9fa"
-        ).pack(side="left", padx=(10, 4))
+        ).pack(side="left", padx=(8, 4))
 
         self.note_text = tk.Entry(
             line1,
             font=("Arial", 10),
-            width=28
+            width=26
         )
         self.note_text.pack(side="left", fill="x", expand=True, padx=4)
+        self.note_text.bind(
+            "<FocusIn>",
+            lambda e: self.note_text.selection_range(0, tk.END)
+        )
+        self.note_text.bind(
+            "<Return>",
+            lambda e: self.save_invoice()
+        )
 
         # Line 2: Save Invoice Button, Clear Button & Branding
         line2 = tk.Frame(bottom_frame, bg="#f8f9fa")
@@ -381,7 +460,7 @@ class InvoiceUI:
 
         self.save_btn = tk.Button(
             line2,
-            text="💾 Save Invoice + PDF (Enter)",
+            text="💾 Save Invoice + PDF (F9 / Ctrl+S)",
             command=self.save_invoice,
             fg="white",
             bg="#5634f0",
@@ -396,7 +475,7 @@ class InvoiceUI:
 
         clear_btn = tk.Button(
             line2,
-            text="🧹 Clear / New Bill",
+            text="🧹 Clear / New Bill (Alt+X)",
             command=self.clear_invoice,
             fg="#495057",
             bg="#e9ecef",
@@ -416,11 +495,12 @@ class InvoiceUI:
             fg="#888888",
             bg="#f8f9fa"
         )
-
         branding_label.pack(side="right", padx=10)
 
         self.auto_fill_paid = True
         self.restore_state()
+        self._bind_tally_shortcuts()
+
 
 
     # =========================
@@ -545,6 +625,41 @@ class InvoiceUI:
             self.discount_base_var.set(product[6])
         else:
             self.discount_base_var.set("Price")
+
+        # Update Live Stock Indicator Badge
+        if len(product) > 4:
+            stock = product[4]
+            unit = product[5] if len(product) > 5 else "Pcs"
+            if hasattr(self, "stock_badge"):
+                if stock > 10:
+                    self.stock_badge.config(
+                        text=f"Stock: {stock} {unit}",
+                        fg="#155724",
+                        bg="#d4edda"
+                    )
+                elif 1 <= stock <= 10:
+                    self.stock_badge.config(
+                        text=f"Low Stock: {stock} {unit}",
+                        fg="#856404",
+                        bg="#fff3cd"
+                    )
+                else:
+                    self.stock_badge.config(
+                        text=f"Out of Stock (0 {unit})",
+                        fg="#721c24",
+                        bg="#f8d7da"
+                    )
+
+
+        # Pre-fill default Qty = 1 if empty
+        if not self.qty_entry.get().strip():
+            self.qty_entry.delete(0, tk.END)
+            self.qty_entry.insert(0, "1")
+
+        # Focus into Qty and select text for instant overwrite (Tally flow)
+        self.qty_entry.focus_set()
+        self.qty_entry.selection_range(0, tk.END)
+
 
     # =========================
     # ADD TO CART
@@ -755,6 +870,15 @@ class InvoiceUI:
             text=f"Grand Total: ₹ {rounded_total}"
         )
 
+        # Live Wholesale Counter (Items & Physical Quantity)
+        if hasattr(self, "items_count_label"):
+            total_items = len(self.cart_items)
+            total_qty = sum(int(item.get("quantity", 0)) for item in self.cart_items)
+            self.items_count_label.config(
+                text=f"Items: {total_items} | Qty: {total_qty}"
+            )
+
+
         if self.auto_fill_paid:
 
             self.paid_entry.delete(
@@ -784,6 +908,13 @@ class InvoiceUI:
 
         self.product_combo.set("")
 
+        if hasattr(self, "stock_badge"):
+            self.stock_badge.config(
+                text="Stock: --",
+                fg="#6c757d",
+                bg="#e9ecef"
+            )
+
         self.qty_entry.delete(
             0,
             tk.END
@@ -794,10 +925,16 @@ class InvoiceUI:
             tk.END
         )
 
+        self.mrp_entry.config(state="normal")
+        self.mrp_entry.delete(0, tk.END)
+        self.mrp_entry.config(state="readonly")
+
+        self.unit_entry.config(state="normal")
         self.unit_entry.delete(
             0,
             tk.END
         )
+        self.unit_entry.config(state="readonly")
 
         self.discount_entry.delete(
             0,
@@ -808,6 +945,7 @@ class InvoiceUI:
             0,
             "0"
         )
+
 
 
     def clear_invoice(self):
@@ -1412,3 +1550,45 @@ class InvoiceUI:
             )
 
             serial += 1
+
+
+
+    # =========================
+    # TALLY GLOBAL KEYBOARD SHORTCUTS
+    # =========================
+
+    def _delete_selected_cart_row(self):
+        """Delete currently selected row in table via Delete / BackSpace key."""
+        selected = self.tree.selection()
+        if selected:
+            self.delete_cart_item(selected[0])
+
+    def _edit_selected_cart_row(self):
+        """Edit currently selected row in table via Enter / F4 key."""
+        selected = self.tree.selection()
+        if selected:
+            self.edit_cart_item(selected[0])
+
+    def _bind_tally_shortcuts(self):
+        """Bind global Tally / POS keyboard shortcuts to toplevel window."""
+        top = self.frame.winfo_toplevel()
+        # F1: Focus Customer Search
+        top.bind("<F1>", lambda e: self.customer_combo.focus_set())
+        # F2: Focus Product Search
+        top.bind("<F2>", lambda e: self.product_combo.focus_set())
+        # F3: Quick Add Customer Popup
+        top.bind("<F3>", lambda e: self.open_customer_popup())
+        top.bind("<Alt-c>", lambda e: self.open_customer_popup())
+        top.bind("<Alt-C>", lambda e: self.open_customer_popup())
+        # F4: Edit Selected Item in Table
+        top.bind("<F4>", lambda e: self._edit_selected_cart_row())
+        # F9 / Ctrl+S: Save Invoice + PDF
+        top.bind("<F9>", lambda e: self.save_invoice())
+        top.bind("<Control-s>", lambda e: self.save_invoice())
+        top.bind("<Control-S>", lambda e: self.save_invoice())
+        # F12: Jump to Paid Amount
+        top.bind("<F12>", lambda e: (self.paid_entry.focus_set(), self.paid_entry.selection_range(0, tk.END)))
+        # Alt+X: Clear / New Bill
+        top.bind("<Alt-x>", lambda e: self.clear_invoice())
+        top.bind("<Alt-X>", lambda e: self.clear_invoice())
+
