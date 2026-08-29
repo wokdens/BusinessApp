@@ -37,6 +37,7 @@ class AutocompleteCombobox(tk.Frame):
         self.popup = None
         self.scrollbar = None
         self._listbox_font = font
+        self._selection_callbacks = []
 
         # Key & Mouse Bindings on Entry
         self.entry.bind("<KeyRelease>", self._on_key_release)
@@ -47,7 +48,6 @@ class AutocompleteCombobox(tk.Frame):
         self.entry.bind("<Escape>", lambda e: self.hide_popup())
         self.entry.bind("<FocusOut>", self._on_entry_focus_out)
         self.entry.bind("<Button-1>", self._on_entry_clicked)
-
 
     # =========================
     # PUBLIC API & PROPERTIES
@@ -71,6 +71,15 @@ class AutocompleteCombobox(tk.Frame):
     def focus_set(self):
         """Focus the entry."""
         self.entry.focus_set()
+
+    def bind(self, sequence=None, func=None, add=None):
+        """Forward event bindings to self and self.entry so listeners on frame catch entry events."""
+        if sequence == "<<ComboboxSelected>>" and func and func not in self._selection_callbacks:
+            self._selection_callbacks.append(func)
+        super().bind(sequence, func, add)
+        return self.entry.bind(sequence, func, add)
+
+
 
     # =========================
     # POPUP WINDOW MANAGEMENT
@@ -198,7 +207,6 @@ class AutocompleteCombobox(tk.Frame):
         else:
             self.hide_popup()
 
-        self._notify_change()
 
     def _on_entry_clicked(self, event):
         """Open all or filtered items on click."""
@@ -321,10 +329,18 @@ class AutocompleteCombobox(tk.Frame):
             self.hide_popup()
 
     def _notify_change(self):
-        """Emit ComboboxSelected and KeyRelease events to trigger autofill listeners."""
+        """Emit ComboboxSelected event and invoke callbacks to trigger autofill listeners."""
         try:
             self.event_generate("<<ComboboxSelected>>")
-            self.entry.event_generate("<KeyRelease>")
+            self.entry.event_generate("<<ComboboxSelected>>")
+            for cb in self._selection_callbacks:
+                try:
+                    cb(None)
+                except Exception:
+                    pass
         except Exception:
             pass
+
+
+
 
