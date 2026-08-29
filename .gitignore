@@ -1,0 +1,31 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+build_old/
+dist/
+dist_old/
+dist_old2/
+executable_old/
+*.egg-info/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Databases & Backups & Generated Invoices
+*.db
+*.sqlite3
+database/*.db
+backups/
+invoices/
+.webui_secret_key
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp

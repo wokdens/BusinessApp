@@ -1,0 +1,265 @@
+import tkinter as tk
+
+from ui.dashboard_ui import DashboardUI
+from ui.inventory_ui import InventoryUI
+from ui.invoice_ui import InvoiceUI
+from ui.invoice_history_ui import InvoiceHistoryUI
+from ui.ledger_ui import LedgerUI
+
+
+class MainWindow:
+
+    def __init__(self, root):
+
+        self.root = root
+
+        self.root.title("Business App")
+
+        self.root.geometry("1200x800")
+
+        # =========================
+        # MENU FRAME
+        # =========================
+
+        menu_frame = tk.Frame(root)
+
+        menu_frame.pack(
+            fill="x",
+            pady=6
+        )
+
+        # =========================
+        # BUTTON COLORS
+        # =========================
+
+        self.default_bg = "#f0f0f0"
+
+        self.active_bg = "#4a90e2"
+
+        self.active_fg = "white"
+
+        # =========================
+        # BUTTONS
+        # =========================
+
+        self.inventory_btn = tk.Button(
+            menu_frame,
+            text="Inventory",
+            width=18,
+            height=1,
+            font=("Arial", 12, "bold"),
+            padx=8,
+            pady=4,
+            command=self.open_inventory
+        )
+
+        self.inventory_btn.pack(
+            side="left",
+            padx=8
+        )
+
+        self.invoice_btn = tk.Button(
+            menu_frame,
+            text="Sales Invoice",
+            width=18,
+            height=1,
+            font=("Arial", 12, "bold"),
+            padx=8,
+            pady=4,
+            command=self.open_invoice
+        )
+
+        self.invoice_btn.pack(
+            side="left",
+            padx=8
+        )
+
+        self.invoice_history_btn = tk.Button(
+            menu_frame,
+            text="Invoice History",
+            width=18,
+            height=1,
+            font=("Arial", 12, "bold"),
+            padx=8,
+            pady=4,
+            command=self.open_invoice_history
+        )
+
+        self.invoice_history_btn.pack(
+            side="left",
+            padx=8
+        )
+
+        self.ledger_btn = tk.Button(
+            menu_frame,
+            text="Ledger",
+            width=18,
+            height=1,
+            font=("Arial", 12, "bold"),
+            padx=8,
+            pady=4,
+            command=self.open_ledger
+        )
+
+        self.ledger_btn.pack(
+            side="left",
+            padx=8
+        )
+
+        # Dashboard moved to END
+        self.dashboard_btn = tk.Button(
+            menu_frame,
+            text="Dashboard",
+            width=18,
+            height=1,
+            font=("Arial", 12, "bold"),
+            padx=8,
+            pady=4,
+            command=self.open_dashboard
+        )
+
+        self.dashboard_btn.pack(
+            side="left",
+            padx=8
+        )
+
+        # =========================
+        # CONTENT FRAME
+        # =========================
+
+        self.content_frame = tk.Frame(
+            root,
+            bg="white",
+            relief="solid",
+            borderwidth=1
+        )
+
+        self.content_frame.pack(
+            fill="both",
+            expand=True,
+            padx=20,
+            pady=12
+        )
+
+        # Default page
+        self.current_ui = None
+        self.open_inventory()
+
+    # =========================
+    # CLEAR CONTENT
+    # =========================
+
+    def clear_content(self):
+
+        if self.current_ui and hasattr(self.current_ui, "save_state"):
+            self.current_ui.save_state()
+
+        for widget in self.content_frame.winfo_children():
+
+            widget.destroy()
+
+        self.current_ui = None
+
+    # =========================
+    # RESET BUTTON COLORS
+    # =========================
+
+    def reset_menu_colors(self):
+
+        buttons = [
+            self.inventory_btn,
+            self.invoice_btn,
+            self.invoice_history_btn,
+            self.ledger_btn,
+            self.dashboard_btn
+        ]
+
+        for btn in buttons:
+
+            btn.config(
+                bg=self.default_bg,
+                fg="black"
+            )
+
+    # =========================
+    # HIGHLIGHT BUTTON
+    # =========================
+
+    def highlight_button(self, button):
+
+        self.reset_menu_colors()
+
+        button.config(
+            bg=self.active_bg,
+            fg=self.active_fg
+        )
+
+    # =========================
+    # INVENTORY
+    # =========================
+
+    def open_inventory(self):
+
+        self.clear_content()
+
+        self.highlight_button(
+            self.inventory_btn
+        )
+
+        self.current_ui = InventoryUI(self.content_frame)
+
+    # =========================
+    # SALES INVOICE
+    # =========================
+
+    def open_invoice(self):
+
+        self.clear_content()
+
+        self.highlight_button(
+            self.invoice_btn
+        )
+
+        self.current_ui = InvoiceUI(self.content_frame)
+
+    # =========================
+    # INVOICE HISTORY
+    # =========================
+
+    def open_invoice_history(self):
+
+        self.clear_content()
+
+        self.highlight_button(
+            self.invoice_history_btn
+        )
+
+        self.current_ui = InvoiceHistoryUI(self.content_frame)
+
+    # =========================
+    # LEDGER
+    # =========================
+
+    def open_ledger(self):
+
+        self.clear_content()
+
+        self.highlight_button(
+            self.ledger_btn
+        )
+
+        self.current_ui = LedgerUI(self.content_frame)
+
+    # =========================
+    # DASHBOARD
+    # =========================
+
+    def open_dashboard(self):
+
+        self.clear_content()
+
+        self.highlight_button(
+            self.dashboard_btn
+        )
+
+        self.current_ui = DashboardUI(self.content_frame)
