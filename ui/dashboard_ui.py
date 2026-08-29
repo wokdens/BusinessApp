@@ -5,6 +5,9 @@ import tkinter as tk
 
 from tkinter import filedialog, messagebox
 
+from datetime import datetime
+import subprocess
+
 from database import (
     get_total_products,
     get_total_customers,
@@ -12,11 +15,13 @@ from database import (
     get_today_sales,
     get_low_stock_items,
     backup_database_to_file,
-    restore_database_from_file
+    restore_database_from_file,
+    get_daily_sales_and_profit
 )
 
-from config import DATABASE_PATH, BACKUPS_DIR
+from config import DATABASE_PATH, BACKUPS_DIR, INVOICES_DIR
 from ui.admin_auth_dialog import request_admin_pin, change_admin_pin_dialog
+
 
 
 class DashboardUI:
@@ -89,10 +94,26 @@ class DashboardUI:
             padx=8
         )
 
+        z_report_btn = tk.Button(
+            top_btn_frame,
+            text="📊 Daily Summary (Z-Report)",
+            width=24,
+            height=2,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            command=self.show_daily_z_report
+        )
+
+        z_report_btn.pack(
+            side="left",
+            padx=8
+        )
+
         change_pin_btn = tk.Button(
             top_btn_frame,
             text="🔒 Change Admin PIN",
-            width=20,
+            width=18,
             height=2,
             bg="#343a40",
             fg="white",
@@ -104,6 +125,7 @@ class DashboardUI:
             side="left",
             padx=8
         )
+
 
 
         # =========================
@@ -311,3 +333,233 @@ class DashboardUI:
                 "Error",
                 f"Restore failed: {str(e)}"
             )
+
+    # ========================================
+    # DAILY SALES & PROFIT SUMMARY (Z-REPORT)
+    # ========================================
+
+    def show_daily_z_report(self):
+        """Displays the Day-End Z-Report summary modal and provides PDF export."""
+        # Security: Require Admin PIN for viewing business profit report
+        if not request_admin_pin(self.frame, "view Daily Sales & Profit Summary (Z-Report)"):
+            return
+
+        report_data = get_daily_sales_and_profit()
+
+        dialog = tk.Toplevel(self.frame)
+        dialog.title("Day-End Z-Report (Sales & Profit Summary)")
+        dialog.geometry("850x620")
+        dialog.transient(self.frame.winfo_toplevel())
+        dialog.grab_set()
+
+        # Center on screen
+        dialog.update_idletasks()
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        w, h = 850, 620
+        x = (sw - w) // 2
+        y = (sh - h) // 2
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+        # Title / Header
+        header_frame = tk.Frame(dialog, bg="#1e222d", pady=12)
+        header_frame.pack(fill="x")
+
+        tk.Label(
+            header_frame,
+            text=f"📊 Day-End Z-Report — {report_data['date']}",
+            font=("Arial", 16, "bold"),
+            bg="#1e222d",
+            fg="white"
+        ).pack()
+
+        # Metric Badges Frame
+        metrics_frame = tk.Frame(dialog, padx=15, pady=10, bg="#f8f9fa")
+        metrics_frame.pack(fill="x", padx=15, pady=10)
+
+        metrics = [
+            ("Total Invoices", str(report_data["invoice_count"]), "#4a90e2"),
+            ("Total Sales", f"₹ {report_data['total_sales']:.2f}", "#28a745"),
+            ("Cash Collected", f"₹ {report_data['total_cash_collected']:.2f}", "#17a2b8"),
+            ("Credit Given", f"₹ {report_data['total_credit_extended']:.2f}", "#fd7e14"),
+            ("Est. Gross Profit", f"₹ {report_data['gross_profit']:.2f}", "#6f42c1")
+        ]
+
+        for i, (m_title, m_val, color) in enumerate(metrics):
+            card = tk.Frame(metrics_frame, bg="white", relief="solid", borderwidth=1, padx=10, pady=8)
+            card.grid(row=0, column=i, padx=5, sticky="nsew")
+            metrics_frame.grid_columnconfigure(i, weight=1)
+
+            tk.Label(card, text=m_title, font=("Arial", 9, "bold"), fg="#666666", bg="white").pack()
+            tk.Label(card, text=m_val, font=("Arial", 12, "bold"), fg=color, bg="white").pack(pady=(4, 0))
+
+        # Items Table Label
+        tk.Label(
+            dialog,
+            text="Products Sold Today & Profit Breakdown",
+            font=("Arial", 12, "bold"),
+            anchor="w"
+        ).pack(fill="x", padx=20, pady=(5, 5))
+
+        # Items Table
+        table_frame = tk.Frame(dialog, padx=15)
+        table_frame.pack(fill="both", expand=True)
+
+        cols = ("Product", "Qty Sold", "Sales Revenue", "Purchase Cost", "Gross Profit")
+        tree = ttk.Treeview(table_frame, columns=cols, show="headings", height=10)
+
+        for col in cols:
+            tree.heading(col, text=col)
+            tree.column(col, anchor="center")
+        tree.column("Product", anchor="w", width=220)
+
+        for row in report_data["items_sold"]:
+            p_name, qty, rev, cost, profit = row
+            tree.insert("", "end", values=(
+                p_name,
+                int(qty),
+                f"₹ {float(rev):.2f}",
+                f"₹ {float(cost):.2f}",
+                f"₹ {float(profit):.2f}"
+            ))
+
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Bottom Button Bar
+        btn_bar = tk.Frame(dialog, pady=10)
+        btn_bar.pack(fill="x", padx=20)
+
+        def export_z_report_pdf():
+            try:
+                from reportlab.lib.pagesizes import letter
+                from reportlab.pdfgen import canvas
+                from config import SHOP_NAME, SHOP_ADDRESS, SHOP_PHONE
+
+                today_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                pdf_path = os.path.join(INVOICES_DIR, f"Z_Report_{today_str}.pdf")
+
+                pdf = canvas.Canvas(pdf_path, pagesize=letter)
+                width, height = letter
+
+                # Title
+                pdf.setFont("Helvetica-Bold", 18)
+                pdf.setFillColorRGB(0.12, 0.14, 0.18)
+                pdf.drawString(40, height - 50, "DAY-END Z-REPORT (DAILY SUMMARY)")
+
+                pdf.setFont("Helvetica", 9)
+                pdf.setFillColorRGB(0.35, 0.35, 0.35)
+                pdf.drawString(40, height - 68, f"Date: {report_data['date']} | Generated: {datetime.now().strftime('%I:%M %p')}")
+
+                # Shop info
+                pdf.setFont("Helvetica-Bold", 12)
+                pdf.setFillColorRGB(0.1, 0.1, 0.1)
+                pdf.drawRightString(width - 40, height - 50, str(SHOP_NAME))
+                pdf.setFont("Helvetica", 9)
+                pdf.setFillColorRGB(0.4, 0.4, 0.4)
+                pdf.drawRightString(width - 40, height - 65, str(SHOP_ADDRESS))
+                pdf.drawRightString(width - 40, height - 78, f"Phone: {SHOP_PHONE}")
+
+                pdf.setStrokeColorRGB(0.8, 0.8, 0.8)
+                pdf.line(40, height - 90, width - 40, height - 90)
+
+                # Key Metrics Summary Box
+                pdf.setFillColorRGB(0.95, 0.96, 0.98)
+                pdf.roundRect(40, height - 170, width - 80, 70, 4, fill=1, stroke=0)
+
+                pdf.setFont("Helvetica-Bold", 10)
+                pdf.setFillColorRGB(0.2, 0.2, 0.2)
+                pdf.drawString(55, height - 115, f"Total Invoices: {report_data['invoice_count']}")
+                pdf.drawString(55, height - 135, f"Total Sales: Rs. {report_data['total_sales']:.2f}")
+
+                pdf.drawString(240, height - 115, f"Cash Collected: Rs. {report_data['total_cash_collected']:.2f}")
+                pdf.drawString(240, height - 135, f"Credit Given: Rs. {report_data['total_credit_extended']:.2f}")
+
+                pdf.setFont("Helvetica-Bold", 11)
+                pdf.setFillColorRGB(0.15, 0.55, 0.2)
+                pdf.drawString(width - 240, height - 125, f"Gross Profit: Rs. {report_data['gross_profit']:.2f}")
+
+                # Table Header
+                table_top = height - 195
+                pdf.setFillColorRGB(0.12, 0.14, 0.18)
+                pdf.rect(40, table_top - 18, width - 80, 20, fill=1, stroke=0)
+
+                pdf.setFont("Helvetica-Bold", 9)
+                pdf.setFillColorRGB(1, 1, 1)
+                pdf.drawString(50, table_top - 14, "Product Name")
+                pdf.drawRightString(260, table_top - 14, "Qty Sold")
+                pdf.drawRightString(350, table_top - 14, "Revenue")
+                pdf.drawRightString(440, table_top - 14, "Cost")
+                pdf.drawRightString(width - 50, table_top - 14, "Gross Profit")
+
+                # Table Rows
+                y = table_top - 36
+                for i, r in enumerate(report_data["items_sold"]):
+                    if y < 70:
+                        pdf.showPage()
+                        y = height - 60
+
+                    if i % 2 == 1:
+                        pdf.setFillColorRGB(0.97, 0.97, 0.97)
+                        pdf.rect(40, y - 4, width - 80, 16, fill=1, stroke=0)
+
+                    p_name, qty, rev, cost, profit = r
+                    pdf.setFont("Helvetica", 9)
+                    pdf.setFillColorRGB(0.2, 0.2, 0.2)
+                    pdf.drawString(50, y, str(p_name)[:30])
+                    pdf.drawRightString(260, y, str(int(qty)))
+                    pdf.drawRightString(350, y, f"Rs. {float(rev):.2f}")
+                    pdf.drawRightString(440, y, f"Rs. {float(cost):.2f}")
+                    pdf.drawRightString(width - 50, y, f"Rs. {float(profit):.2f}")
+                    y -= 18
+
+                # Footer
+                pdf.setStrokeColorRGB(0.8, 0.8, 0.8)
+                pdf.line(40, 45, width - 40, 45)
+                pdf.setFont("Helvetica-Bold", 8)
+                pdf.setFillColorRGB(0.5, 0.5, 0.5)
+                pdf.drawString(40, 32, "Confidential - Business Management Daily Audit")
+                pdf.drawRightString(width - 40, 32, "⚡ Powered by Wokdens")
+
+                pdf.save()
+
+                if os.name == "nt":
+                    os.startfile(os.path.abspath(pdf_path))
+                else:
+                    subprocess.Popen(["xdg-open", os.path.abspath(pdf_path)])
+
+                messagebox.showinfo("Report Exported", f"Daily Z-Report PDF saved to:\n{pdf_path}", parent=dialog)
+            except Exception as ex:
+                messagebox.showerror("Export Error", str(ex), parent=dialog)
+
+        tk.Button(
+            btn_bar,
+            text="📄 Export Z-Report PDF",
+            command=export_z_report_pdf,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 11, "bold"),
+            padx=12,
+            pady=4
+        ).pack(side="left")
+
+        tk.Button(
+            btn_bar,
+            text="Close",
+            command=dialog.destroy,
+            bg="#6c757d",
+            fg="white",
+            font=("Arial", 11, "bold"),
+            padx=12,
+            pady=4
+        ).pack(side="right")
+
+        # Footer Branding
+        tk.Label(
+            dialog,
+            text="⚡ Powered by Wokdens",
+            font=("Arial", 8, "italic"),
+            fg="#888888"
+        ).pack(side="bottom", pady=4)

@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os
 import subprocess
+from datetime import datetime
 from database import (
     get_customers_with_pending,
     get_customer_invoices,
@@ -9,9 +10,12 @@ from database import (
     get_invoice_items,
     update_invoice_payment,
     get_total_pending,
-    update_invoice_note
+    update_invoice_note,
+    get_customer_statement_data
 )
+from config import INVOICES_DIR
 from ui.admin_auth_dialog import request_admin_pin
+
 
 
 
@@ -186,7 +190,19 @@ class LedgerUI:
             padx=10,
             pady=4
         )
-        pay_all_btn.pack(side="left", padx=10)
+        pay_all_btn.pack(side="left", padx=6)
+
+        statement_btn = tk.Button(
+            header_frame,
+            text="📄 Statement PDF",
+            command=self.export_statement_pdf,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 11, "bold"),
+            padx=10,
+            pady=4
+        )
+        statement_btn.pack(side="left", padx=6)
 
         # Filter button
         self.filter_pending_only = False
@@ -198,6 +214,7 @@ class LedgerUI:
             font=("Arial", 10, "bold")
         )
         self.filter_btn.pack(side="right")
+
 
         # =========================
         # TABLE
@@ -320,6 +337,149 @@ class LedgerUI:
             height=2
         )
         no_btn.pack(side="left", padx=20)
+
+    def export_statement_pdf(self):
+        """Generates a formal Statement of Account PDF for the selected customer."""
+        customer_name = getattr(self, "current_customer_name", None)
+        if not customer_name:
+            return
+
+        cust_info, transactions = get_customer_statement_data(customer_name)
+        if not cust_info or not transactions:
+            messagebox.showinfo("No Transactions", f"No transactions found for {customer_name}")
+            return
+
+        import re
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', customer_name)
+        today_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_path = os.path.join(INVOICES_DIR, f"Statement_{safe_name}_{today_str}.pdf")
+
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.pdfgen import canvas
+            from config import SHOP_NAME, SHOP_ADDRESS, SHOP_PHONE
+
+            pdf = canvas.Canvas(pdf_path, pagesize=letter)
+            width, height = letter
+
+            # Header Title
+            pdf.setFont("Helvetica-Bold", 18)
+            pdf.setFillColorRGB(0.12, 0.14, 0.18)
+            pdf.drawString(40, height - 50, "STATEMENT OF ACCOUNT")
+
+            pdf.setFont("Helvetica", 9)
+            pdf.setFillColorRGB(0.35, 0.35, 0.35)
+            pdf.drawString(40, height - 68, f"Generated: {datetime.now().strftime('%d-%m-%Y %I:%M %p')}")
+
+            # Business Details (Right aligned)
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.setFillColorRGB(0.1, 0.1, 0.1)
+            pdf.drawRightString(width - 40, height - 50, str(SHOP_NAME))
+            pdf.setFont("Helvetica", 9)
+            pdf.setFillColorRGB(0.4, 0.4, 0.4)
+            pdf.drawRightString(width - 40, height - 65, str(SHOP_ADDRESS))
+            pdf.drawRightString(width - 40, height - 78, f"Phone: {SHOP_PHONE}")
+
+            # Divider line
+            pdf.setStrokeColorRGB(0.8, 0.8, 0.8)
+            pdf.setLineWidth(1)
+            pdf.line(40, height - 90, width - 40, height - 90)
+
+            # Customer Details & Balance Box
+            pdf.setFillColorRGB(0.96, 0.97, 0.98)
+            pdf.roundRect(40, height - 165, width - 80, 65, 4, fill=1, stroke=0)
+
+            pdf.setFont("Helvetica-Bold", 11)
+            pdf.setFillColorRGB(0.2, 0.2, 0.2)
+            pdf.drawString(55, height - 112, f"Customer: {cust_info['name']}")
+            pdf.setFont("Helvetica", 9)
+            pdf.drawString(55, height - 128, f"Phone: {cust_info['phone'] or 'N/A'}")
+            pdf.drawString(55, height - 144, f"Address: {cust_info['address'] or 'N/A'}")
+
+            # Balance Summary (Right Box)
+            pdf.setFont("Helvetica-Bold", 10)
+            pdf.drawString(width - 230, height - 112, f"Total Invoiced: Rs. {cust_info['total_invoiced']:.2f}")
+            pdf.drawString(width - 230, height - 128, f"Total Paid: Rs. {cust_info['total_paid']:.2f}")
+            pdf.setFillColorRGB(0.85, 0.1, 0.1)
+            pdf.drawString(width - 230, height - 144, f"Net Balance: Rs. {cust_info['net_dues']:.2f}")
+
+            # Table Header Bar
+            table_top = height - 190
+            pdf.setFillColorRGB(0.12, 0.14, 0.18)
+            pdf.rect(40, table_top - 18, width - 80, 20, fill=1, stroke=0)
+
+            pdf.setFont("Helvetica-Bold", 9)
+            pdf.setFillColorRGB(1, 1, 1)
+            pdf.drawString(50, table_top - 14, "Date")
+            pdf.drawString(130, table_top - 14, "Invoice No")
+            pdf.drawRightString(280, table_top - 14, "Billed (Debit)")
+            pdf.drawRightString(370, table_top - 14, "Paid (Credit)")
+            pdf.drawRightString(460, table_top - 14, "Pending")
+            pdf.drawRightString(width - 50, table_top - 14, "Balance Due")
+
+            # Table Rows
+            y = table_top - 36
+            for i, tx in enumerate(transactions):
+                if y < 70:
+                    # Draw page footer on current page
+                    pdf.setStrokeColorRGB(0.85, 0.85, 0.85)
+                    pdf.line(40, 45, width - 40, 45)
+                    pdf.setFont("Helvetica-Bold", 8)
+                    pdf.setFillColorRGB(0.5, 0.5, 0.5)
+                    pdf.drawRightString(width - 40, 32, "⚡ Powered by Wokdens")
+
+                    pdf.showPage()
+                    y = height - 60
+
+                    # Table Header on new page
+                    pdf.setFillColorRGB(0.12, 0.14, 0.18)
+                    pdf.rect(40, y - 18, width - 80, 20, fill=1, stroke=0)
+                    pdf.setFont("Helvetica-Bold", 9)
+                    pdf.setFillColorRGB(1, 1, 1)
+                    pdf.drawString(50, y - 14, "Date")
+                    pdf.drawString(130, y - 14, "Invoice No")
+                    pdf.drawRightString(280, y - 14, "Billed (Debit)")
+                    pdf.drawRightString(370, y - 14, "Paid (Credit)")
+                    pdf.drawRightString(460, y - 14, "Pending")
+                    pdf.drawRightString(width - 50, y - 14, "Balance Due")
+                    y -= 36
+
+                # Alternate row shading
+                if i % 2 == 1:
+                    pdf.setFillColorRGB(0.97, 0.97, 0.97)
+                    pdf.rect(40, y - 4, width - 80, 16, fill=1, stroke=0)
+
+                pdf.setFont("Helvetica", 9)
+                pdf.setFillColorRGB(0.2, 0.2, 0.2)
+                pdf.drawString(50, y, str(tx["date"]))
+                pdf.drawString(130, y, f"INV-{tx['invoice_number']}")
+                pdf.drawRightString(280, y, f"Rs. {tx['total']:.2f}")
+                pdf.drawRightString(370, y, f"Rs. {tx['paid']:.2f}")
+                pdf.drawRightString(460, y, f"Rs. {tx['pending']:.2f}")
+                pdf.drawRightString(width - 50, y, f"Rs. {tx['running_balance']:.2f}")
+                y -= 18
+
+            # Footer
+            pdf.setStrokeColorRGB(0.8, 0.8, 0.8)
+            pdf.line(40, 45, width - 40, 45)
+            pdf.setFont("Helvetica", 8)
+            pdf.setFillColorRGB(0.4, 0.4, 0.4)
+            pdf.drawString(40, 32, "Please verify all transactions and clear outstanding dues promptly.")
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawRightString(width - 40, 32, "⚡ Powered by Wokdens")
+
+            pdf.save()
+
+            # Open PDF automatically
+            if os.name == "nt":
+                os.startfile(os.path.abspath(pdf_path))
+            else:
+                subprocess.Popen(["xdg-open", os.path.abspath(pdf_path)])
+
+            messagebox.showinfo("Statement Generated", f"Statement of Account saved successfully:\n{pdf_path}")
+        except Exception as e:
+            messagebox.showerror("Error Generating Statement", str(e))
+
 
     def toggle_invoice_filter(self):
         """Toggle between showing all invoices and pending only"""

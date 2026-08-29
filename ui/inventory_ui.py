@@ -8,11 +8,13 @@ from tkinter import ttk, messagebox, simpledialog
 from database import (
     get_connection,
     get_all_categories,
-    add_category
+    add_category,
+    record_stock_adjustment
 )
 
 from ui.autocomplete_combobox import AutocompleteCombobox
 from ui.admin_auth_dialog import request_admin_pin
+
 
 
 
@@ -369,13 +371,24 @@ class InventoryUI:
 
         tk.Button(
             btn_frame,
-            text="Clear",
-            width=15,
-            command=self.clear_form,
+            text="⚠️ Stock Adjustment",
+            width=18,
+            command=self.open_stock_adjustment_dialog,
             fg="white",
-            bg="#ea1b1b",
+            bg="#fd7e14",
             font=("Arial", 10, "bold")
         ).pack(side="left", padx=5)
+
+        tk.Button(
+            btn_frame,
+            text="Clear",
+            width=12,
+            command=self.clear_form,
+            fg="white",
+            bg="#6c757d",
+            font=("Arial", 10, "bold")
+        ).pack(side="left", padx=5)
+
 
         # =========================
         # TABLE
@@ -1013,3 +1026,162 @@ class InventoryUI:
                 "Import Error",
                 str(e)
             )
+
+    # =====================================
+    # STOCK ADJUSTMENT (RETURNS & DAMAGES)
+    # =====================================
+
+    def open_stock_adjustment_dialog(self):
+        """Allows recording stock adjustments (Damaged, Return, Expired, Count Correction)."""
+        if self.selected_product_id is None:
+            messagebox.showinfo("Select Product", "Please select a product from the inventory list first.")
+            return
+
+        # Security: Require Admin PIN for stock adjustments
+        if not request_admin_pin(self.frame, "record stock adjustment (Damage/Return/Audit)"):
+            return
+
+        # Fetch latest product info
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, category, stock, unit FROM products WHERE id = ?", (self.selected_product_id,))
+        prod = cursor.fetchone()
+        conn.close()
+
+        if not prod:
+            messagebox.showerror("Error", "Product not found.")
+            return
+
+        p_id, p_name, p_cat, p_stock, p_unit = prod
+
+        dialog = tk.Toplevel(self.frame)
+        dialog.title("Stock Adjustment (Audit)")
+        dialog.geometry("520x400")
+        dialog.resizable(False, False)
+        dialog.transient(self.frame.winfo_toplevel())
+        dialog.grab_set()
+
+        # Center on screen
+        dialog.update_idletasks()
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        w, h = 520, 400
+        x = (sw - w) // 2
+        y = (sh - h) // 2
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+        # Title
+        header = tk.Frame(dialog, bg="#1e222d", pady=10)
+        header.pack(fill="x")
+        tk.Label(
+            header,
+            text="⚠️ Stock Adjustment (Returns & Damages)",
+            font=("Arial", 13, "bold"),
+            bg="#1e222d",
+            fg="#ffcc00"
+        ).pack()
+
+        form = tk.Frame(dialog, padx=25, pady=15)
+        form.pack(fill="both", expand=True)
+
+        tk.Label(form, text="Product:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", pady=6)
+        tk.Label(form, text=f"{p_name} ({p_cat})", font=("Arial", 10)).grid(row=0, column=1, sticky="w", pady=6, padx=10)
+
+        tk.Label(form, text="Current Stock:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", pady=6)
+        tk.Label(form, text=f"{p_stock} {p_unit}", font=("Arial", 10, "bold"), fg="#007bff").grid(row=1, column=1, sticky="w", pady=6, padx=10)
+
+        tk.Label(form, text="Adjustment Type:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="w", pady=6)
+        adj_type_combo = ttk.Combobox(
+            form,
+            values=[
+                "Damaged / Broken (-)",
+                "Customer Return (+)",
+                "Supplier Return (-)",
+                "Expired / Dead Stock (-)",
+                "Inventory Count Correction (+)",
+                "Inventory Count Correction (-)"
+            ],
+            state="readonly",
+            width=28,
+            font=("Arial", 10)
+        )
+        adj_type_combo.set("Damaged / Broken (-)")
+        adj_type_combo.grid(row=2, column=1, sticky="w", pady=6, padx=10)
+
+        tk.Label(form, text="Quantity:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky="w", pady=6)
+        qty_entry = tk.Entry(form, font=("Arial", 11), width=15)
+        qty_entry.grid(row=3, column=1, sticky="w", pady=6, padx=10)
+        qty_entry.focus_set()
+
+        tk.Label(form, text="Audit Reason / Note:", font=("Arial", 10, "bold")).grid(row=4, column=0, sticky="nw", pady=6)
+        reason_entry = tk.Text(form, font=("Arial", 10), width=28, height=3)
+        reason_entry.grid(row=4, column=1, sticky="w", pady=6, padx=10)
+
+        def save_adjustment():
+            qty_str = qty_entry.get().strip()
+            if not qty_str:
+                messagebox.showwarning("Missing Quantity", "Please enter adjustment quantity.", parent=dialog)
+                qty_entry.focus_set()
+                return
+
+            try:
+                adj_qty = int(qty_str)
+                if adj_qty <= 0:
+                    messagebox.showwarning("Invalid Quantity", "Quantity must be greater than 0.", parent=dialog)
+                    return
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter a valid whole number for quantity.", parent=dialog)
+                return
+
+            adj_type = adj_type_combo.get()
+            # Calculate signed quantity
+            if "(-)" in adj_type:
+                signed_qty = -adj_qty
+            else:
+                signed_qty = adj_qty
+
+            reason = reason_entry.get("1.0", tk.END).strip()
+
+            try:
+                new_stock = record_stock_adjustment(p_id, adj_type, signed_qty, reason)
+                messagebox.showinfo(
+                    "Stock Adjusted",
+                    f"Stock updated successfully!\n\nProduct: {p_name}\nAdjustment: {adj_type} {adj_qty}\nNew Stock: {new_stock} {p_unit}",
+                    parent=dialog
+                )
+                dialog.destroy()
+                self.load_products()
+                self.clear_form()
+            except Exception as ex:
+                messagebox.showerror("Error", str(ex), parent=dialog)
+
+        btn_box = tk.Frame(dialog, pady=10)
+        btn_box.pack(fill="x", padx=25)
+
+        tk.Button(
+            btn_box,
+            text="Save Adjustment",
+            command=save_adjustment,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            width=16
+        ).pack(side="left", padx=10)
+
+        tk.Button(
+            btn_box,
+            text="Cancel",
+            command=dialog.destroy,
+            bg="#6c757d",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            width=12
+        ).pack(side="right", padx=10)
+
+        tk.Label(
+            dialog,
+            text="⚡ Powered by Wokdens",
+            font=("Arial", 8, "italic"),
+            fg="#888888"
+        ).pack(side="bottom", pady=4)
+

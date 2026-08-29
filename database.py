@@ -91,10 +91,17 @@ def run_migrations():
         ADD COLUMN invoice_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         """)
 
+    cursor.execute("""
+    UPDATE invoices
+    SET invoice_date = datetime('now', 'localtime')
+    WHERE invoice_date IS NULL
+    """)
+
     if not column_exists(
         "invoices",
         "note"
     ):
+
 
         cursor.execute("""
         ALTER TABLE invoices
@@ -223,6 +230,20 @@ def run_migrations():
     )
     """)
 
+    # =========================
+    # STOCK ADJUSTMENTS TABLE
+    # =========================
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS stock_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        adjustment_type TEXT,
+        quantity INTEGER,
+        reason TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     conn.commit()
 
     conn.close()
@@ -304,9 +325,22 @@ def create_tables():
     )
     """)
 
+    # STOCK ADJUSTMENTS
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS stock_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        adjustment_type TEXT,
+        quantity INTEGER,
+        reason TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     conn.commit()
 
     conn.close()
+
 
 
 # =========================
@@ -682,13 +716,29 @@ def save_complete_invoice(
 
     cursor = conn.cursor()
 
-# GENERATE DAILY INVOICE NUMBER 
+    # GENERATE DAILY INVOICE NUMBER 
     invoice_number = generate_invoice_number() 
     # CREATE INVOICE 
-    cursor.execute(""" INSERT INTO invoices( invoice_number, customer_id, total, paid, pending, note 
+    cursor.execute("""
+    INSERT INTO invoices(
+        invoice_number,
+        customer_id,
+        total,
+        paid,
+        pending,
+        note,
+        invoice_date
     )                    
-    VALUES (?, ?, ?, ?, ?, ?) """, ( invoice_number, customer_id, grand_total, paid_amount, pending, note )
-    )
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    """, (
+        invoice_number,
+        customer_id,
+        grand_total,
+        paid_amount,
+        pending,
+        note
+    ))
+
 
     invoice_id = cursor.lastrowid
 
@@ -902,7 +952,7 @@ def get_today_sales():
     cursor.execute("""
     SELECT SUM(total)
     FROM invoices
-    WHERE date(invoice_date) = date('now')
+    WHERE date(invoice_date) = date('now', 'localtime')
     """)
 
     result = cursor.fetchone()[0]
@@ -910,6 +960,7 @@ def get_today_sales():
     conn.close()
 
     return result if result else 0
+
 
 
 def get_low_stock_items():
@@ -1332,5 +1383,229 @@ def close_database_on_exit():
     except Exception as e:
         print(f"Database exit check error: {e}")
         return str(e)
+
+
+# =====================================
+# STOCK ADJUSTMENTS (RETURNS & DAMAGES)
+# =====================================
+
+def record_stock_adjustment(product_id, adjustment_type, quantity, reason=""):
+    """
+    Records a stock adjustment (Damage, Return, Expired, Correction) and updates product stock.
+    Positive quantity increases stock (e.g. Customer Return).
+    Negative quantity decreases stock (e.g. Damaged / Broken / Supplier Return).
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Get current stock
+        cursor.execute("SELECT stock FROM products WHERE id = ?", (product_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Product not found")
+
+        current_stock = row[0]
+        new_stock = max(0, current_stock + quantity)
+
+        # Update product stock
+        cursor.execute("UPDATE products SET stock = ? WHERE id = ?", (new_stock, product_id))
+
+        # Record adjustment entry
+        cursor.execute("""
+        INSERT INTO stock_adjustments (product_id, adjustment_type, quantity, reason)
+        VALUES (?, ?, ?, ?)
+        """, (product_id, adjustment_type, quantity, reason))
+
+        conn.commit()
+        return new_stock
+    finally:
+        conn.close()
+
+
+def get_stock_adjustments(product_id=None, limit=100):
+    """Retrieve stock adjustment audit history."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if product_id:
+            cursor.execute("""
+            SELECT
+                sa.id,
+                sa.timestamp,
+                p.name,
+                sa.adjustment_type,
+                sa.quantity,
+                sa.reason
+            FROM stock_adjustments sa
+            JOIN products p ON sa.product_id = p.id
+            WHERE sa.product_id = ?
+            ORDER BY sa.id DESC
+            LIMIT ?
+            """, (product_id, limit))
+        else:
+            cursor.execute("""
+            SELECT
+                sa.id,
+                sa.timestamp,
+                p.name,
+                sa.adjustment_type,
+                sa.quantity,
+                sa.reason
+            FROM stock_adjustments sa
+            JOIN products p ON sa.product_id = p.id
+            ORDER BY sa.id DESC
+            LIMIT ?
+            """, (limit,))
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+# =====================================
+# CUSTOMER ACCOUNT STATEMENT DATA
+# =====================================
+
+def get_customer_statement_data(customer_name):
+    """
+    Fetches full chronological transaction statement for a customer.
+    Returns:
+      customer_info: dict(name, phone, address, total_invoiced, total_paid, net_dues)
+      transactions: list of dicts(id, invoice_number, date, total, paid, pending, running_balance, note)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, name, COALESCE(phone, ''), COALESCE(address, '') FROM customers WHERE name = ?", (customer_name,))
+        cust_row = cursor.fetchone()
+        if not cust_row:
+            return None, []
+
+        cust_id, name, phone, address = cust_row
+
+        cursor.execute("""
+        SELECT
+            id,
+            invoice_number,
+            COALESCE(strftime('%d-%m-%Y', invoice_date), 'N/A'),
+            total,
+            paid,
+            pending,
+            COALESCE(note, '')
+        FROM invoices
+        WHERE customer_id = ?
+        ORDER BY id ASC
+        """, (cust_id,))
+
+        raw_invoices = cursor.fetchall()
+        transactions = []
+        running_balance = 0.0
+        total_invoiced = 0.0
+        total_paid = 0.0
+
+        for row in raw_invoices:
+            inv_id, inv_no, date_str, total, paid, pending, note = row
+            total = float(total or 0)
+            paid = float(paid or 0)
+            pending = float(pending or 0)
+
+            total_invoiced += total
+            total_paid += paid
+            running_balance += (total - paid)
+
+            transactions.append({
+                "id": inv_id,
+                "invoice_number": inv_no,
+                "date": date_str,
+                "total": total,
+                "paid": paid,
+                "pending": pending,
+                "running_balance": round(running_balance, 2),
+                "note": note
+            })
+
+        customer_info = {
+            "name": name,
+            "phone": phone,
+            "address": address,
+            "total_invoiced": round(total_invoiced, 2),
+            "total_paid": round(total_paid, 2),
+            "net_dues": round(max(0, running_balance), 2),
+            "invoice_count": len(transactions)
+        }
+
+        return customer_info, transactions
+    finally:
+        conn.close()
+
+
+# =====================================
+# DAILY SALES & PROFIT SUMMARY (Z-REPORT)
+# =====================================
+
+def get_daily_sales_and_profit(target_date=None):
+    """
+    Computes day-end summary metrics and profit report for a given date (default: today).
+    Returns dict containing:
+      - total_sales: Total billed amount today
+      - total_cash_collected: Total paid on bills created today
+      - total_credit_extended: Total pending balance on bills created today
+      - invoice_count: Total invoices today
+      - gross_profit: Estimated gross profit (Actual Selling Total - Total Purchase Cost)
+      - items_sold: List of tuples (product_name, qty_sold, selling_total, cost_total, profit)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        date_clause = "date(invoices.invoice_date) = date('now', 'localtime')"
+        date_param = ()
+        if target_date:
+            date_clause = "date(invoices.invoice_date) = date(?)"
+            date_param = (target_date,)
+
+
+        # 1. High-level totals
+        cursor.execute(f"""
+        SELECT
+            COUNT(invoices.id),
+            COALESCE(SUM(invoices.total), 0),
+            COALESCE(SUM(invoices.paid), 0),
+            COALESCE(SUM(invoices.pending), 0)
+        FROM invoices
+        WHERE {date_clause}
+        """, date_param)
+
+        inv_count, total_sales, total_paid, total_pending = cursor.fetchone()
+
+        # 2. Product-wise sales and gross profit calculation
+        cursor.execute(f"""
+        SELECT
+            p.name,
+            SUM(ii.quantity) as total_qty,
+            SUM(ii.total) as item_revenue,
+            SUM(CAST(COALESCE(p.purchase_price, 0) AS REAL) * ii.quantity) as item_cost,
+            SUM(ii.total - (CAST(COALESCE(p.purchase_price, 0) AS REAL) * ii.quantity)) as item_profit
+        FROM invoice_items ii
+        JOIN invoices ON ii.invoice_id = invoices.id
+        JOIN products p ON ii.product_id = p.id
+        WHERE {date_clause}
+        GROUP BY p.id, p.name
+        ORDER BY item_profit DESC
+        """, date_param)
+
+        items_sold = cursor.fetchall()
+        total_gross_profit = sum(row[4] for row in items_sold) if items_sold else 0.0
+
+        return {
+            "date": target_date if target_date else datetime.now().strftime("%d-%m-%Y"),
+            "invoice_count": inv_count,
+            "total_sales": round(float(total_sales), 2),
+            "total_cash_collected": round(float(total_paid), 2),
+            "total_credit_extended": round(float(total_pending), 2),
+            "gross_profit": round(float(total_gross_profit), 2),
+            "items_sold": items_sold
+        }
+    finally:
+        conn.close()
+
 
 
