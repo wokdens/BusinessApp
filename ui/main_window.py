@@ -17,9 +17,11 @@ class MainWindow:
 
         self.root.geometry("1200x780")
         self.root.minsize(1024, 650)
+        self.current_ui = None
 
         # =========================
         # FOOTER STATUS / BRANDING BAR
+
         # =========================
         footer_frame = tk.Frame(root, bg="#1e222d", height=32)
         footer_frame.pack(side="bottom", fill="x")
@@ -312,7 +314,16 @@ class MainWindow:
     # DASHBOARD
     # =========================
 
+    def open_dashboard(self):
+
+        self.clear_content()
+
+        self.highlight_button(
+            self.dashboard_btn
+        )
+
         self.current_ui = DashboardUI(self.content_frame)
+
 
     # =========================
     # ROLE MANAGEMENT
