@@ -985,10 +985,11 @@ class InvoiceUI:
         # =====================================
         # HEADER (ESTIMATE ONLY - NO SHOP DETAILS)
         # =====================================
-        # Main Heading (ESTIMATE)
+        # Main Heading (ESTIMATE ONLY)
         pdf.setFont("Helvetica-Bold", 16)
         pdf.setFillColorRGB(0.12, 0.14, 0.18)
-        pdf.drawString(40, 805, "ESTIMATE")
+        pdf.drawString(40, 805, "ESTIMATE ONLY")
+
 
         # Date / Time (Right)
         pdf.setFont("Helvetica", 9)
