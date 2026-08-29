@@ -32,8 +32,10 @@ class InvoiceUI:
 
         self.parent = parent
         self.cart_items = []
+        self.editing_cart_index = None
 
         self.frame = tk.Frame(parent)
+
         self.frame.pack(
             fill="both",
             expand=True,
@@ -654,6 +656,33 @@ class InvoiceUI:
 
         total = effective_price * quantity
 
+        # IF CURRENTLY IN EDIT MODE -> UPDATE ROW IN PLACE (SAME ORDER / SERIAL NO)
+        if self.editing_cart_index is not None and self.editing_cart_index < len(self.cart_items):
+            item = {
+                "product_id": product[0],
+                "name": product_name,
+                "quantity": quantity,
+                "mrp": mrp,
+                "price": custom_price,
+                "unit": unit,
+                "discount": discount,
+                "discount_base": discount_base,
+                "total": total
+            }
+            self.cart_items[self.editing_cart_index] = item
+            self.editing_cart_index = None
+            self.add_btn.config(
+                text="➕ Add to Bill (Enter)",
+                bg="#28a745",
+                activebackground="#218838"
+            )
+            self.refresh_cart_table()
+            self.update_total()
+            self.clear_inputs()
+            self.product_combo.entry.focus_set()
+            self.product_combo.entry.icursor(tk.END)
+            return
+
         # Check if identical product is already in cart -> increase count
         existing_item = None
         for itm in self.cart_items:
@@ -745,6 +774,13 @@ class InvoiceUI:
 
     def clear_inputs(self):
 
+        self.editing_cart_index = None
+        self.add_btn.config(
+            text="➕ Add to Bill (Enter)",
+            bg="#28a745",
+            activebackground="#218838"
+        )
+
         self.product_combo.set("")
 
         self.qty_entry.delete(
@@ -771,6 +807,7 @@ class InvoiceUI:
             0,
             "0"
         )
+
 
     def clear_invoice(self):
 
@@ -1386,6 +1423,11 @@ class InvoiceUI:
 
             del self.cart_items[index]
 
+        if self.editing_cart_index == index:
+            self.clear_inputs()
+        elif self.editing_cart_index is not None and self.editing_cart_index > index:
+            self.editing_cart_index -= 1
+
         self.refresh_cart_table()
 
         self.update_total()
@@ -1398,6 +1440,7 @@ class InvoiceUI:
         if index >= len(self.cart_items):
             return
 
+        self.editing_cart_index = index
         cart_item = self.cart_items[index]
 
         self.product_combo.set(
@@ -1410,10 +1453,6 @@ class InvoiceUI:
             0,
             cart_item["quantity"]
         )
-
-        # self.price_entry.config(
-        #     state="normal"
-        # )
 
         self.price_entry.delete(
             0,
@@ -1442,10 +1481,6 @@ class InvoiceUI:
         self.mrp_entry.config(
             state="readonly"
         )
-
-        # self.price_entry.config(
-        #     state="readonly"
-        # )
 
         self.unit_entry.config(
             state="normal"
@@ -1477,11 +1512,15 @@ class InvoiceUI:
 
         self.discount_base_var.set(cart_item.get("discount_base", "Price"))
 
-        del self.cart_items[index]
+        self.add_btn.config(
+            text=f"💾 Update Row #{index + 1} (Enter)",
+            bg="#0066cc",
+            activebackground="#0052a3"
+        )
 
-        self.refresh_cart_table()
+        self.qty_entry.focus_set()
+        self.qty_entry.selection_range(0, tk.END)
 
-        self.update_total()
 
 
     def refresh_cart_table(self):
