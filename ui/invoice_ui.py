@@ -1225,23 +1225,43 @@ class InvoiceUI:
             path = os.path.join(INVOICES_DIR, f"INV-{invoice_number}.pdf")
 
         pdf = canvas.Canvas(path)
-
-
         # =====================================
-        # TITLE
+        # TITLE & SHOP HEADER
         # =====================================
+        from database import get_shop_details
+        shop = get_shop_details()
 
         pdf.setFont(
             "Helvetica-Bold",
-            22
-            
+            16
         )
-        pdf.setFillColorRGB(0, 0, 1)
-
+        pdf.setFillColorRGB(0.1, 0.1, 0.1)
         pdf.drawString(
-            220,
-            800,
-            "ESTIMATE ONLY"
+            50,
+            810,
+            str(shop["name"])
+        )
+
+        pdf.setFont(
+            "Helvetica",
+            8
+        )
+        pdf.setFillColorRGB(0.35, 0.35, 0.35)
+        pdf.drawString(
+            50,
+            798,
+            f"{shop['address']} | Phone: {shop['phone']}"
+        )
+
+        pdf.setFont(
+            "Helvetica-Bold",
+            12
+        )
+        pdf.setFillColorRGB(0, 0, 0.8)
+        pdf.drawString(
+            450,
+            810,
+            "ESTIMATE / INVOICE"
         )
 
         # =====================================
@@ -1250,26 +1270,26 @@ class InvoiceUI:
 
         pdf.setFont(
             "Helvetica",
-            11
+            10
         )
         
         pdf.setFillColorRGB(0, 0, 0)
 
         pdf.drawString(
             50,
-            770,
+            775,
             f"Invoice: INV-{invoice_number}-{customer_name.split(' ')[0].upper()}"
         )
 
         pdf.drawString(
             50,
-            750,
+            760,
             f"Customer: {customer_name.upper()}"
         )
 
         pdf.drawString(
             450,
-            770,
+            775,
             f"Date: {datetime.now().strftime('%d-%m-%Y')}"
         )
 

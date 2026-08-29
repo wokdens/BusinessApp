@@ -79,6 +79,19 @@ class LedgerUI:
         self.search_entry.pack(side="left", padx=10)
         self.search_entry.bind("<KeyRelease>", self.search_customers)
 
+        export_ledger_btn = tk.Button(
+            search_frame,
+            text="📊 Export Ledger CSV",
+            command=self.export_ledger_csv,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=10,
+            pady=3
+        )
+        export_ledger_btn.pack(side="right", padx=5)
+
+
         # =========================
         # TABLE
         # =========================
@@ -135,6 +148,37 @@ class LedgerUI:
         customer_name = values[0]
         self.selected_customer = customer_name
         self.show_invoice_list(customer_name)
+
+    def export_ledger_csv(self):
+        """Exports the customer dues ledger to CSV (Admin PIN Protected)."""
+        if not request_admin_pin(self.frame, "export customer ledger data to CSV"):
+            return
+
+        from tkinter import filedialog
+        import csv
+
+        file_path = filedialog.asksaveasfilename(
+            title="Export Customer Ledger",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv")],
+            initialfile="customer_ledger.csv"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            customers = get_customers_with_pending()
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Customer Name", "Total Pending Dues (Rs)", "Invoices Count"])
+                for row in customers:
+                    writer.writerow([row[0], row[1], row[2]])
+
+            messagebox.showinfo("Export Successful", f"Customer ledger exported successfully to:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+
 
     # =========================
     # INVOICE LIST VIEW
@@ -357,7 +401,9 @@ class LedgerUI:
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.pdfgen import canvas
-            from config import SHOP_NAME, SHOP_ADDRESS, SHOP_PHONE
+            from database import get_shop_details
+
+            shop = get_shop_details()
 
             pdf = canvas.Canvas(pdf_path, pagesize=letter)
             width, height = letter
@@ -374,11 +420,12 @@ class LedgerUI:
             # Business Details (Right aligned)
             pdf.setFont("Helvetica-Bold", 12)
             pdf.setFillColorRGB(0.1, 0.1, 0.1)
-            pdf.drawRightString(width - 40, height - 50, str(SHOP_NAME))
+            pdf.drawRightString(width - 40, height - 50, str(shop["name"]))
             pdf.setFont("Helvetica", 9)
             pdf.setFillColorRGB(0.4, 0.4, 0.4)
-            pdf.drawRightString(width - 40, height - 65, str(SHOP_ADDRESS))
-            pdf.drawRightString(width - 40, height - 78, f"Phone: {SHOP_PHONE}")
+            pdf.drawRightString(width - 40, height - 65, str(shop["address"]))
+            pdf.drawRightString(width - 40, height - 78, f"Phone: {shop['phone']}")
+
 
             # Divider line
             pdf.setStrokeColorRGB(0.8, 0.8, 0.8)

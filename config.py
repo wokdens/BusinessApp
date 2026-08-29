@@ -27,3 +27,8 @@ os.makedirs(BACKUPS_DIR, exist_ok=True)
 os.makedirs(AUTO_BACKUPS_DIR, exist_ok=True)
 
 DATABASE_PATH = os.path.join(DB_DIR, "business.db")
+
+# Default Shop Profile
+SHOP_NAME = "Electrical Wholesale & Retail"
+SHOP_PHONE = "9876543210"
+SHOP_ADDRESS = "Wholesale Electrical Market"

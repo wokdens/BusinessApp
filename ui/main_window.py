@@ -159,6 +159,29 @@ class MainWindow:
         )
 
         # =========================
+        # 1-CLICK ROLE TOGGLE (STAFF / ADMIN)
+        # =========================
+        self.role_toggle_btn = tk.Button(
+            menu_frame,
+            text="👤 Staff Mode [🔒 Unlock Admin]",
+            font=("Arial", 10, "bold"),
+            bg="#e9ecef",
+            fg="#495057",
+            padx=10,
+            pady=4,
+            command=self.toggle_role
+        )
+        self.role_toggle_btn.pack(
+            side="right",
+            padx=10
+        )
+
+        from ui.admin_auth_dialog import register_role_listener, is_admin_mode
+        register_role_listener(self.update_role_ui)
+        self.update_role_ui(is_admin_mode())
+
+
+        # =========================
         # CONTENT FRAME
         # =========================
 
@@ -289,12 +312,30 @@ class MainWindow:
     # DASHBOARD
     # =========================
 
-    def open_dashboard(self):
-
-        self.clear_content()
-
-        self.highlight_button(
-            self.dashboard_btn
-        )
-
         self.current_ui = DashboardUI(self.content_frame)
+
+    # =========================
+    # ROLE MANAGEMENT
+    # =========================
+
+    def toggle_role(self):
+        from ui.admin_auth_dialog import toggle_admin_mode_dialog
+        toggle_admin_mode_dialog(self.root)
+
+    def update_role_ui(self, admin_active):
+        if admin_active:
+            self.role_toggle_btn.config(
+                text="👑 Admin Mode [🔓 Lock]",
+                bg="#ffd700",
+                fg="#212529"
+            )
+        else:
+            self.role_toggle_btn.config(
+                text="👤 Staff Mode [🔒 Unlock Admin]",
+                bg="#e9ecef",
+                fg="#495057"
+            )
+        # Notify active UI view if it supports live role change
+        if self.current_ui and hasattr(self.current_ui, "on_role_changed"):
+            self.current_ui.on_role_changed(admin_active)
+

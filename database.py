@@ -376,6 +376,23 @@ def set_setting(key, value):
         conn.close()
 
 
+def get_shop_details():
+    """Retrieve shop name, phone, and address from settings (with config.py defaults)."""
+    from config import SHOP_NAME, SHOP_PHONE, SHOP_ADDRESS
+    name = get_setting("shop_name", SHOP_NAME)
+    phone = get_setting("shop_phone", SHOP_PHONE)
+    address = get_setting("shop_address", SHOP_ADDRESS)
+    return {"name": name, "phone": phone, "address": address}
+
+
+def set_shop_details(name, phone, address):
+    """Save custom shop details in app_settings."""
+    set_setting("shop_name", name.strip())
+    set_setting("shop_phone", phone.strip())
+    set_setting("shop_address", address.strip())
+
+
+
 
 def hash_pin(pin_str):
     """Generate SHA-256 hash for PIN security."""

@@ -2,15 +2,90 @@
 from tkinter import messagebox
 from database import verify_admin_pin, set_admin_pin
 
+# ==========================================
+# GLOBAL SESSION STATE (DEFAULT: STAFF MODE)
+# ==========================================
+_is_admin_mode = False
+_role_listeners = []
 
-def request_admin_pin(parent, action_name="perform this action"):
+
+def is_admin_mode():
+    """Returns True if Admin/Owner Mode is active, False for Staff/Operator Mode."""
+    global _is_admin_mode
+    return _is_admin_mode
+
+
+def set_admin_mode(enabled):
+    """Explicitly set Admin Mode state and notify all registered UI listeners."""
+    global _is_admin_mode
+    _is_admin_mode = bool(enabled)
+    notify_role_listeners()
+
+
+def register_role_listener(callback):
+    """Register a UI callback function to be invoked when the role changes."""
+    global _role_listeners
+    if callback not in _role_listeners:
+        _role_listeners.append(callback)
+
+
+def unregister_role_listener(callback):
+    """Remove a UI callback from role listeners."""
+    global _role_listeners
+    if callback in _role_listeners:
+        _role_listeners.remove(callback)
+
+
+def notify_role_listeners():
+    """Notify all registered UI components to update their role-based views/buttons."""
+    global _role_listeners, _is_admin_mode
+    for cb in list(_role_listeners):
+        try:
+            cb(_is_admin_mode)
+        except Exception as e:
+            print(f"Role listener notification error: {e}")
+
+
+def toggle_admin_mode_dialog(parent):
+    """
+    1-Click toggle between Staff (Operator) Mode and Admin (Owner) Mode.
+    If currently Admin -> Locks back to Staff Mode immediately.
+    If currently Staff -> Prompts for Admin PIN to unlock Admin Mode.
+    """
+    global _is_admin_mode
+    if _is_admin_mode:
+        set_admin_mode(False)
+        messagebox.showinfo(
+            "Staff Mode Active",
+            "Switched to Operator (Staff) Mode.\nSensitive actions and cost prices are now locked.",
+            parent=parent
+        )
+        return False
+    else:
+        if request_admin_pin(parent, "unlock full Admin / Owner Mode", allow_session_unlock=True):
+            set_admin_mode(True)
+            messagebox.showinfo(
+                "Admin Mode Unlocked",
+                "Admin (Owner) Mode is now active.\nAll controls, pricing updates, and purchase costs are unlocked.",
+                parent=parent
+            )
+            return True
+        return False
+
+
+def request_admin_pin(parent, action_name="perform this action", allow_session_unlock=False):
     """
     Displays a modal dialog asking for the Owner/Admin PIN.
+    If Admin Mode is already active, returns True immediately.
     Returns True if the entered PIN is correct, False otherwise.
     """
+    global _is_admin_mode
+    if _is_admin_mode:
+        return True
+
     dialog = tk.Toplevel(parent)
     dialog.title("Admin Authorization Required")
-    dialog.geometry("450x250")
+    dialog.geometry("460x280")
     dialog.resizable(False, False)
     dialog.transient(parent.winfo_toplevel())
     dialog.grab_set()
@@ -19,7 +94,7 @@ def request_admin_pin(parent, action_name="perform this action"):
     dialog.update_idletasks()
     sw = dialog.winfo_screenwidth()
     sh = dialog.winfo_screenheight()
-    w, h = 450, 250
+    w, h = 460, 280
     x = (sw - w) // 2
     y = (sh - h) // 2
     dialog.geometry(f"{w}x{h}+{x}+{y}")
@@ -27,27 +102,27 @@ def request_admin_pin(parent, action_name="perform this action"):
     result = [False]
 
     # Title / Header
-    header_frame = tk.Frame(dialog, bg="#f8f9fa", pady=10)
+    header_frame = tk.Frame(dialog, bg="#1e222d", pady=10)
     header_frame.pack(fill="x")
-    
+
     tk.Label(
         header_frame,
         text="🔒 Admin Authorization Required",
         font=("Arial", 13, "bold"),
-        bg="#f8f9fa",
-        fg="#d9534f"
+        bg="#1e222d",
+        fg="#ffcc00"
     ).pack()
 
-    content_frame = tk.Frame(dialog, padx=20, pady=15)
+    content_frame = tk.Frame(dialog, padx=20, pady=12)
     content_frame.pack(fill="both", expand=True)
 
     tk.Label(
         content_frame,
         text=f"Enter Owner PIN to {action_name}:",
         font=("Arial", 11),
-        wraplength=400,
+        wraplength=410,
         justify="center"
-    ).pack(pady=(0, 10))
+    ).pack(pady=(0, 8))
 
     pin_entry = tk.Entry(
         content_frame,
@@ -56,11 +131,20 @@ def request_admin_pin(parent, action_name="perform this action"):
         justify="center",
         width=15
     )
-    pin_entry.pack(pady=5, ipady=4)
+    pin_entry.pack(pady=4, ipady=3)
     pin_entry.focus_set()
 
+    unlock_session_var = tk.BooleanVar(value=allow_session_unlock)
+    unlock_check = tk.Checkbutton(
+        content_frame,
+        text="Keep Admin Mode unlocked for this session",
+        variable=unlock_session_var,
+        font=("Arial", 9)
+    )
+    unlock_check.pack(pady=4)
+
     btn_frame = tk.Frame(content_frame)
-    btn_frame.pack(pady=12)
+    btn_frame.pack(pady=10)
 
     def on_submit(event=None):
         entered = pin_entry.get().strip()
@@ -71,6 +155,8 @@ def request_admin_pin(parent, action_name="perform this action"):
 
         if verify_admin_pin(entered):
             result[0] = True
+            if unlock_session_var.get():
+                set_admin_mode(True)
             dialog.destroy()
         else:
             messagebox.showerror("Access Denied", "Incorrect Admin PIN.", parent=dialog)
@@ -128,7 +214,7 @@ def change_admin_pin_dialog(parent):
     """
     dialog = tk.Toplevel(parent)
     dialog.title("Change Admin PIN")
-    dialog.geometry("450x330")
+    dialog.geometry("450x340")
     dialog.resizable(False, False)
     dialog.transient(parent.winfo_toplevel())
     dialog.grab_set()
@@ -137,7 +223,7 @@ def change_admin_pin_dialog(parent):
     dialog.update_idletasks()
     sw = dialog.winfo_screenwidth()
     sh = dialog.winfo_screenheight()
-    w, h = 450, 330
+    w, h = 450, 340
     x = (sw - w) // 2
     y = (sh - h) // 2
     dialog.geometry(f"{w}x{h}+{x}+{y}")

@@ -13,7 +13,8 @@ from database import (
 )
 
 from ui.autocomplete_combobox import AutocompleteCombobox
-from ui.admin_auth_dialog import request_admin_pin
+from ui.admin_auth_dialog import request_admin_pin, is_admin_mode
+
 
 
 
@@ -569,14 +570,19 @@ class InventoryUI:
         conn.close()
 
         self.all_products = products
+        self.product_map = {p[0]: p for p in products}
+        admin_active = is_admin_mode()
 
         for product in products:
+            display_val = list(product)
+            if not admin_active:
+                display_val[4] = "***"
 
             self.tree.insert(
                 "",
                 "end",
                 iid=str(product[0]),
-                values=product
+                values=display_val
             )
 
     # =========================
@@ -594,6 +600,8 @@ class InventoryUI:
             *self.tree.get_children()
         )
 
+        admin_active = is_admin_mode()
+
         for product in self.all_products:
 
             category = str(product[1]).lower()
@@ -604,12 +612,15 @@ class InventoryUI:
                 keyword in category
                 or keyword in name
             ):
+                display_val = list(product)
+                if not admin_active:
+                    display_val[4] = "***"
 
                 self.tree.insert(
                     "",
                     "end",
                     iid=str(product[0]),
-                    values=product
+                    values=display_val
                 )
 
     # =========================
@@ -653,17 +664,15 @@ class InventoryUI:
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            self.category_combo.get().strip(),
-            self.name_entry.get(),
+            self.category_combo.get().strip() or "General",
+            self.name_entry.get().strip(),
             float(self.mrp_entry.get().strip() or 0),
             float(self.purchase_entry.get().strip() or 0),
             float(self.selling_entry.get().strip() or 0),
-            self.unit_entry.get(),
-            int(self.stock_entry.get() or 0),
+            self.unit_entry.get().strip() or "Pcs",
+            int(self.stock_entry.get().strip() or 0),
             self.discount_base_combo.get() or "Price"
         ))
-        
-       
 
         conn.commit()
 
@@ -695,9 +704,12 @@ class InventoryUI:
             item_id
         )["values"]
 
-        self.selected_product_id = values[0]
+        prod_id = int(values[0])
+        self.selected_product_id = prod_id
 
         self.clear_form_fields()
+
+        orig_prod = getattr(self, "product_map", {}).get(prod_id)
 
         self.category_combo.set(values[1])
 
@@ -705,7 +717,14 @@ class InventoryUI:
 
         self.mrp_entry.insert(0, values[3])
 
-        self.purchase_entry.insert(0, values[4])
+        # Purchase price masking logic
+        self.purchase_entry.config(state="normal")
+        if is_admin_mode():
+            real_purchase = orig_prod[4] if orig_prod else values[4]
+            self.purchase_entry.insert(0, str(real_purchase))
+        else:
+            self.purchase_entry.insert(0, "***")
+            self.purchase_entry.config(state="disabled")
 
         self.selling_entry.insert(0, values[5])
         
@@ -736,9 +755,16 @@ class InventoryUI:
 
         try:
             mrp_val = float(self.mrp_entry.get().strip() or 0)
-            purchase_val = float(self.purchase_entry.get().strip() or 0)
             selling_val = float(self.selling_entry.get().strip() or 0)
             stock_val = int(self.stock_entry.get().strip() or 0)
+            
+            # If purchase price was masked, keep original purchase price from DB
+            purchase_str = self.purchase_entry.get().strip()
+            if purchase_str == "***":
+                orig_prod = getattr(self, "product_map", {}).get(self.selected_product_id)
+                purchase_val = float(orig_prod[4] if orig_prod else 0)
+            else:
+                purchase_val = float(purchase_str or 0)
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter valid numeric values for MRP, Purchase Price, Selling Price, and Stock.")
             return
@@ -783,6 +809,7 @@ class InventoryUI:
         self.load_products()
 
         self.clear_form()
+
 
     # =========================
     # DELETE PRODUCT
@@ -848,6 +875,7 @@ class InventoryUI:
 
         self.mrp_entry.delete(0, tk.END)
 
+        self.purchase_entry.config(state="normal")
         self.purchase_entry.delete(0, tk.END)
 
         self.selling_entry.delete(0, tk.END)
@@ -867,6 +895,12 @@ class InventoryUI:
         self.selected_product_id = None
 
         self.clear_form_fields()
+
+    def on_role_changed(self, admin_active):
+        """Called automatically when switching between Staff and Admin modes."""
+        self.load_products()
+        self.clear_form()
+
         
     def export_products_csv(self):
         # Security: Require Admin PIN to export products & pricing data

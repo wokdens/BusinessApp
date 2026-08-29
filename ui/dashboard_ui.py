@@ -16,8 +16,11 @@ from database import (
     get_low_stock_items,
     backup_database_to_file,
     restore_database_from_file,
-    get_daily_sales_and_profit
+    get_daily_sales_and_profit,
+    get_shop_details,
+    set_shop_details
 )
+
 
 from config import DATABASE_PATH, BACKUPS_DIR, INVOICES_DIR
 from ui.admin_auth_dialog import request_admin_pin, change_admin_pin_dialog
@@ -125,6 +128,23 @@ class DashboardUI:
             side="left",
             padx=8
         )
+
+        shop_details_btn = tk.Button(
+            top_btn_frame,
+            text="🏬 Shop Details",
+            width=16,
+            height=2,
+            bg="#6c757d",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            command=self.edit_shop_details_dialog
+        )
+
+        shop_details_btn.pack(
+            side="left",
+            padx=8
+        )
+
 
 
 
@@ -262,6 +282,10 @@ class DashboardUI:
 
     def backup_database(self):
 
+        # Security: Require Admin PIN to create database backup
+        if not request_admin_pin(self.frame, "create manual database backup"):
+            return
+
         try:
 
             from datetime import datetime
@@ -288,6 +312,107 @@ class DashboardUI:
                 "Error",
                 f"Backup failed: {str(e)}"
             )
+
+    # =========================
+    # EDIT SHOP DETAILS
+    # =========================
+
+    def edit_shop_details_dialog(self):
+        """Allows editing business name, phone, and address printed on invoices and statements."""
+        if not request_admin_pin(self.frame, "change shop business details"):
+            return
+
+        shop = get_shop_details()
+
+        dialog = tk.Toplevel(self.frame)
+        dialog.title("Edit Shop Details")
+        dialog.geometry("520x330")
+        dialog.resizable(False, False)
+        dialog.transient(self.frame.winfo_toplevel())
+        dialog.grab_set()
+
+        # Center on screen
+        dialog.update_idletasks()
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        w, h = 520, 330
+        x = (sw - w) // 2
+        y = (sh - h) // 2
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+        header = tk.Frame(dialog, bg="#1e222d", pady=10)
+        header.pack(fill="x")
+        tk.Label(
+            header,
+            text="🏬 Shop Business Details",
+            font=("Arial", 13, "bold"),
+            bg="#1e222d",
+            fg="white"
+        ).pack()
+
+        form = tk.Frame(dialog, padx=25, pady=15)
+        form.pack(fill="both", expand=True)
+
+        tk.Label(form, text="Shop Name:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", pady=6)
+        name_entry = tk.Entry(form, font=("Arial", 11), width=32)
+        name_entry.grid(row=0, column=1, pady=6, padx=10)
+        name_entry.insert(0, shop["name"])
+        name_entry.focus_set()
+
+        tk.Label(form, text="Phone Number:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", pady=6)
+        phone_entry = tk.Entry(form, font=("Arial", 11), width=32)
+        phone_entry.grid(row=1, column=1, pady=6, padx=10)
+        phone_entry.insert(0, shop["phone"])
+
+        tk.Label(form, text="Address / GSTIN:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="nw", pady=6)
+        address_entry = tk.Text(form, font=("Arial", 10), width=32, height=3)
+        address_entry.grid(row=2, column=1, pady=6, padx=10)
+        address_entry.insert("1.0", shop["address"])
+
+        def on_save():
+            new_name = name_entry.get().strip()
+            new_phone = phone_entry.get().strip()
+            new_address = address_entry.get("1.0", tk.END).strip()
+
+            if not new_name:
+                messagebox.showwarning("Missing Name", "Please enter Shop Name.", parent=dialog)
+                name_entry.focus_set()
+                return
+
+            set_shop_details(new_name, new_phone, new_address)
+            messagebox.showinfo("Saved", "Shop details updated successfully!", parent=dialog)
+            dialog.destroy()
+
+        btn_bar = tk.Frame(dialog, pady=10)
+        btn_bar.pack(fill="x", padx=25)
+
+        tk.Button(
+            btn_bar,
+            text="Save Details",
+            command=on_save,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            width=14
+        ).pack(side="left", padx=10)
+
+        tk.Button(
+            btn_bar,
+            text="Cancel",
+            command=dialog.destroy,
+            bg="#6c757d",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            width=10
+        ).pack(side="right", padx=10)
+
+        tk.Label(
+            dialog,
+            text="⚡ Powered by Wokdens",
+            font=("Arial", 8, "italic"),
+            fg="#888888"
+        ).pack(side="bottom", pady=4)
+
 
     # =========================
     # RESTORE DATABASE
