@@ -81,45 +81,69 @@ class InvoiceHistoryUI:
             "Note"
         )
 
-        style = ttk.Style()
-
-        style.configure(
-            "Treeview.Heading",
-            font=("Arial", 11, "bold")
-        )
-
-        style.configure(
-            "Treeview",
-            font=("Arial", 10),
-            rowheight=28
-        )
-
-        self.tree = ttk.Treeview(
+        table_frame = tk.Frame(
             self.frame,
-            columns=columns,
-            show="headings"
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground="#ced4da"
         )
-
-        for col in columns:
-
-            self.tree.heading(
-                col,
-                text=col,
-                anchor="w"
-            )
-
-            self.tree.column(
-                col,
-                width=160,
-                anchor="w"
-            )
-
-        self.tree.pack(
+        table_frame.pack(
             fill="both",
             expand=True,
             padx=20,
-            pady=20
+            pady=(0, 20)
         )
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings",
+            selectmode="browse"
+        )
+
+        scroll_y = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.tree.yview
+        )
+        self.tree.configure(yscrollcommand=scroll_y.set)
+
+        for col in columns:
+            self.tree.heading(
+                col,
+                text=col,
+                anchor="center" if col in ("Date", "Total", "Paid", "Pending") else "w"
+            )
+
+            width = 150
+            if col == "Invoice No":
+                width = 220
+            elif col == "Customer":
+                width = 200
+            elif col in ("Date", "Total", "Paid", "Pending"):
+                width = 110
+            elif col == "Note":
+                width = 180
+
+            self.tree.column(
+                col,
+                width=width,
+                anchor="center" if col in ("Date", "Total", "Paid", "Pending") else "w"
+            )
+
+        self.tree.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+        scroll_y.pack(
+            side="right",
+            fill="y"
+        )
+
+        self.tree.tag_configure("evenrow", background="#ffffff")
+        self.tree.tag_configure("oddrow", background="#f8f9fa")
 
         # Double Click
         self.tree.bind(
@@ -178,7 +202,7 @@ class InvoiceHistoryUI:
             *self.tree.get_children()
         )
 
-        for row in data:
+        for idx, row in enumerate(data):
 
             invoice_no = row[1]  # invoice_number column
             customer_name = row[3]
@@ -196,18 +220,21 @@ class InvoiceHistoryUI:
                 display_invoice,
                 row[2],
                 row[3],
-                row[4],
-                row[5],
-                row[6],
+                f"₹ {row[4]}",
+                f"₹ {row[5]}",
+                f"₹ {row[6]}",
                 row[7]
             )
 
+            tag = "evenrow" if idx % 2 == 0 else "oddrow"
             self.tree.insert(
                 "",
                 "end",
                 values=new_row,
-                iid=row[0]
+                iid=row[0],
+                tags=(tag,)
             )
+
 
     # =========================
     # SEARCH

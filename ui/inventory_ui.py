@@ -437,7 +437,11 @@ class InventoryUI:
         )
         
         table_frame = tk.Frame(
-            self.frame
+            self.frame,
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground="#ced4da"
         )
 
         table_frame.pack(
@@ -450,7 +454,8 @@ class InventoryUI:
         self.tree = ttk.Treeview(
             table_frame,
             columns=columns,
-            show="headings"
+            show="headings",
+            selectmode="browse"
         )
         
         scroll_y = ttk.Scrollbar(
@@ -459,15 +464,8 @@ class InventoryUI:
             command=self.tree.yview
         )
 
-        # scroll_x = ttk.Scrollbar(
-        #     table_frame,
-        #     orient="horizontal",
-        #     command=self.tree.xview
-        # )
-
         self.tree.configure(
-            yscrollcommand=scroll_y.set,
-            # xscrollcommand=scroll_x.set
+            yscrollcommand=scroll_y.set
         )
 
         for col in columns:
@@ -475,41 +473,38 @@ class InventoryUI:
             self.tree.heading(
                 col,
                 text=col,
-                anchor="w"
+                anchor="center" if col in ("MRP", "Purchase", "Selling", "Unit", "Stock", "Discount On") else "w"
             )
+
+            width = 140
+            if col == "ID":
+                width = 60
+            elif col in ("Name", "Category"):
+                width = 200
+            elif col in ("MRP", "Purchase", "Selling", "Stock"):
+                width = 100
+            elif col in ("Unit", "Discount On"):
+                width = 85
 
             self.tree.column(
                 col,
-                width=140,
-                anchor="w"
+                width=width,
+                anchor="center" if col in ("MRP", "Purchase", "Selling", "Unit", "Stock", "Discount On") else "w"
             )
 
-            # self.tree.pack(
-            #     side="left",
-            #     fill="both",
-            #     expand=True
-            # )
-
-            # scroll_y.pack(
-            #     side="right",
-            #     fill="y"
-            # )
-
-            # scroll_x.pack(
-            #     side="bottom",
-            #     fill="x"
-            # )
-            
         self.tree.pack(
-                side="left",
-                fill="both",
-                expand=True
+            side="left",
+            fill="both",
+            expand=True
         )
 
         scroll_y.pack(
             side="right",
             fill="y"
         )
+
+        self.tree.tag_configure("evenrow", background="#ffffff")
+        self.tree.tag_configure("oddrow", background="#f8f9fa")
 
         self.tree.bind(
             "<<TreeviewSelect>>",
@@ -589,16 +584,18 @@ class InventoryUI:
         self.product_map = {p[0]: p for p in products}
         admin_active = is_admin_mode()
 
-        for product in products:
+        for idx, product in enumerate(products):
             display_val = list(product)
             if not admin_active:
                 display_val[4] = "***"
 
+            tag = "evenrow" if idx % 2 == 0 else "oddrow"
             self.tree.insert(
                 "",
                 "end",
                 iid=str(product[0]),
-                values=display_val
+                values=display_val,
+                tags=(tag,)
             )
 
     # =========================
@@ -618,6 +615,7 @@ class InventoryUI:
 
         admin_active = is_admin_mode()
 
+        match_count = 0
         for product in self.all_products:
 
             category = str(product[1]).lower()
@@ -632,12 +630,15 @@ class InventoryUI:
                 if not admin_active:
                     display_val[4] = "***"
 
+                tag = "evenrow" if match_count % 2 == 0 else "oddrow"
                 self.tree.insert(
                     "",
                     "end",
                     iid=str(product[0]),
-                    values=display_val
+                    values=display_val,
+                    tags=(tag,)
                 )
+                match_count += 1
 
     # =========================
     # SAVE PRODUCT

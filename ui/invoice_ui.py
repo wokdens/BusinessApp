@@ -279,7 +279,13 @@ class InvoiceUI:
         # 3. CART TABLE WITH INTERNAL SCROLLBAR
         # =========================
 
-        table_frame = tk.Frame(self.frame)
+        table_frame = tk.Frame(
+            self.frame,
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground="#ced4da"
+        )
         table_frame.pack(
             fill="both",
             expand=True,
@@ -334,6 +340,9 @@ class InvoiceUI:
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
 
+        self.tree.tag_configure("evenrow", background="#ffffff")
+        self.tree.tag_configure("oddrow", background="#f8f9fa")
+
         self.tree.bind(
             "<Button-1>",
             self.handle_table_click
@@ -343,6 +352,7 @@ class InvoiceUI:
         self.tree.bind("<BackSpace>", lambda e: self._delete_selected_cart_row())
         self.tree.bind("<Return>", lambda e: self._edit_selected_cart_row())
         self.tree.bind("<F4>", lambda e: self._edit_selected_cart_row())
+
 
         # =========================
         # 4. BOTTOM SUMMARY & ACTIONS
@@ -1529,8 +1539,8 @@ class InvoiceUI:
 
         serial = 1
 
-        for item in self.cart_items:
-
+        for idx, item in enumerate(self.cart_items):
+            tag = "evenrow" if idx % 2 == 0 else "oddrow"
             self.tree.insert(
                 "",
                 "end",
@@ -1546,10 +1556,12 @@ class InvoiceUI:
                     item["total"],
                     "✏",
                     "❌"
-                )
+                ),
+                tags=(tag,)
             )
 
             serial += 1
+
 
 
 

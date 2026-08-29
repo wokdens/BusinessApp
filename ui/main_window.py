@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 
 from ui.dashboard_ui import DashboardUI
 from ui.inventory_ui import InventoryUI
@@ -18,6 +19,9 @@ class MainWindow:
         self.root.geometry("1200x780")
         self.root.minsize(1024, 650)
         self.current_ui = None
+
+        self._configure_styles()
+
 
         # =========================
         # FOOTER STATUS / BRANDING BAR
@@ -350,4 +354,42 @@ class MainWindow:
         # Notify active UI view if it supports live role change
         if self.current_ui and hasattr(self.current_ui, "on_role_changed"):
             self.current_ui.on_role_changed(admin_active)
+
+    def _configure_styles(self):
+        """Apply modern, crisp tabular styles with distinct borders across all ttk tables."""
+        style = ttk.Style()
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+
+        # Base Treeview Styling
+        style.configure(
+            "Treeview",
+            background="#ffffff",
+            foreground="#212529",
+            rowheight=28,
+            fieldbackground="#ffffff",
+            bordercolor="#ced4da",
+            borderwidth=1,
+            font=("Arial", 10)
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", "#0066cc")],
+            foreground=[("selected", "#ffffff")]
+        )
+
+        # Column Headers Styling
+        style.configure(
+            "Treeview.Heading",
+            font=("Arial", 10, "bold"),
+            background="#e9ecef",
+            foreground="#212529",
+            relief="groove",
+            borderwidth=1
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", "#dee2e6")]
+        )
+
 
