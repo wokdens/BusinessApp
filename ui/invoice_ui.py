@@ -33,19 +33,18 @@ class InvoiceUI:
         self.parent = parent
         self.cart_items = []
 
-        # self.frame = tk.Frame(parent)
-
-        # self.frame.pack(
-        #     fill="both",
-        #     expand=True
-        # )
-        
-        canvas = Canvas(parent)
+        self.frame = tk.Frame(parent)
+        self.frame.pack(
+            fill="both",
+            expand=True,
+            padx=10,
+            pady=5
+        )
 
         style = ttk.Style()
-        style.configure("TCombobox", font=("Arial", 12, "bold"))
-        style.configure("Treeview.Heading", font=("Arial", 12, "bold"))
-        style.configure("Treeview", font=("Arial", 12, "bold"), rowheight=36)
+        style.configure("TCombobox", font=("Arial", 11, "bold"))
+        style.configure("Treeview.Heading", font=("Arial", 11, "bold"))
+        style.configure("Treeview", font=("Arial", 11), rowheight=28)
 
         style.configure(
             "Vertical.TScrollbar",
@@ -58,107 +57,43 @@ class InvoiceUI:
             arrowcolor="black"
         )
 
-        scrollbar = ttk.Scrollbar(
-            parent,
-            orient="vertical",
-            command=canvas.yview
-        )
-
-        self.frame = tk.Frame(canvas)
-
-        self.frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        )
-
-        canvas.create_window(
-            (0, 0),
-            window=self.frame,
-            anchor="nw"
-        )
-
-        canvas.configure(
-            yscrollcommand=scrollbar.set
-        )
-        
-        self.canvas = canvas
-
-        # self.frame.bind_all(
-        #     "<MouseWheel>",
-        #     self._on_mousewheel
-        # )
-        
-        canvas.pack(
-            side="left",
-            fill="both",
-            expand=True,
-            padx=(0, 5)
-        )
-
-        scrollbar.pack(
-            side="right",
-            fill="y",
-            padx=2,
-            pady=2
-        )
-
         self.selected_cell_value = ""
 
         # =========================
-        # CUSTOMER SECTION
+        # 1. CUSTOMER SECTION
         # =========================
 
-        customer_frame = tk.Frame(
-            self.frame
-        )
-
+        customer_frame = tk.Frame(self.frame)
         customer_frame.pack(
             fill="x",
-            padx=12,
-            pady=6
+            padx=4,
+            pady=(2, 4)
         )
 
         tk.Label(
             customer_frame,
-            text="Customer Name",
-            font=("Arial", 14, "bold")
+            text="Customer Name:",
+            font=("Arial", 12, "bold")
         ).pack(
             side="left",
-            padx=(6, 8)
+            padx=(4, 6)
         )
 
-        self.customer_combo = (
-            AutocompleteCombobox(
-                customer_frame,
-                width=26
-            )
+        self.customer_combo = AutocompleteCombobox(
+            customer_frame,
+            width=28
         )
-
-        self.customer_combo.entry.config(
-            font=("Arial", 12, "bold")
-        )
-        self.customer_combo.listbox.config(font=("Arial", 11, "bold"))
-
+        self.customer_combo.entry.config(font=("Arial", 11, "bold"))
+        self.customer_combo.listbox.config(font=("Arial", 11))
         self.customer_combo.pack(
             side="left",
             fill="x",
             expand=True,
-            padx=6,
-            ipady=4
+            padx=4,
+            ipady=3
         )
-        
+
         self.refresh_customers()
-        
-        # def _on_mousewheel(self, event):
-
-        #     self.canvas.yview_scroll(
-        #         int(-1 * (event.delta / 120)),
-        #         "units"
-        #     )
-
-        #     self.refresh_customers()
 
         add_customer_btn = tk.Button(
             customer_frame,
@@ -168,329 +103,126 @@ class InvoiceUI:
             fg="black",
             activebackground="#d68e00",
             relief="raised",
-            bd=3,
-            padx=8,
-            pady=4,
-            font=("Arial", 11, "bold"),
+            bd=2,
+            padx=10,
+            pady=3,
+            font=("Arial", 10, "bold")
         )
+        add_customer_btn.pack(side="left", padx=4)
 
-        add_customer_btn.pack(
-            side="left",
-            padx=5
-        )
-        
         clear_invoice_btn = tk.Button(
             customer_frame,
-            text="Clear & New Invoice",
-            bg="#f4a300",
-            fg="black",
-            activebackground="#d68e00",
+            text="🧹 Clear / New Bill",
+            bg="#e9ecef",
+            fg="#495057",
+            activebackground="#dde2e6",
             relief="raised",
-            bd=3,
-            padx=8,
-            pady=4,
-            font=("Arial", 11, "bold"),
+            bd=2,
+            padx=10,
+            pady=3,
+            font=("Arial", 10, "bold"),
             command=self.clear_invoice
         )
-
-        clear_invoice_btn.pack(
-            side="left",
-            padx=5
-        )
+        clear_invoice_btn.pack(side="left", padx=4)
 
         # =========================
-        # PRODUCT SECTION
+        # 2. PRODUCT SECTION (Compact & Fast)
         # =========================
 
         product_frame = tk.LabelFrame(
             self.frame,
-            text="Add Product",
-            padx=15,
-            pady=15
+            text="Add Product to Bill",
+            font=("Arial", 10, "bold"),
+            padx=10,
+            pady=6
         )
-
         product_frame.pack(
             fill="x",
-            padx=12,
-            pady=6
+            padx=4,
+            pady=(2, 4)
         )
 
         for col in (1, 3, 5, 7):
             product_frame.grid_columnconfigure(col, weight=1)
 
-        # PRODUCT
-
+        # Row 0: Product Search Dropdown
         tk.Label(
             product_frame,
-            text="Product",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=0,
-            column=0,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
+            text="Product:",
+            font=("Arial", 11, "bold")
+        ).grid(row=0, column=0, padx=6, pady=3, sticky="w")
 
-        self.product_combo = (
-            AutocompleteCombobox(
-                product_frame,
-                width=28
-            )
+        self.product_combo = AutocompleteCombobox(
+            product_frame,
+            width=32
         )
-
-        self.product_combo.entry.config(
-            font=("Arial", 12, "bold")
-        )
-        self.product_combo.listbox.config(font=("Arial", 11, "bold"))
-
+        self.product_combo.entry.config(font=("Arial", 11, "bold"))
+        self.product_combo.listbox.config(font=("Arial", 11))
         self.product_combo.grid(
             row=0,
             column=1,
-            columnspan=5,
-            padx=5,
-            pady=4,
+            columnspan=7,
+            padx=4,
+            pady=3,
             sticky="ew"
         )
 
         products = get_product_names()
+        self.product_combo.set_completion_list(products)
 
-        self.product_combo.set_completion_list(
-            products
-        )
+        self.product_combo.bind("<KeyRelease>", self.autofill_product_details)
+        self.product_combo.bind("<<ComboboxSelected>>", self.autofill_product_details)
+        self.product_combo.bind("<FocusOut>", self.autofill_product_details)
 
-        # AUTOFILL EVENTS
+        # Row 1: Qty, MRP, Price, Unit
+        tk.Label(product_frame, text="Qty:", font=("Arial", 10, "bold")).grid(row=1, column=0, padx=4, pady=3, sticky="w")
+        self.qty_entry = tk.Entry(product_frame, width=6, font=("Arial", 11, "bold"), justify="center")
+        self.qty_entry.grid(row=1, column=1, padx=4, pady=3, ipady=2, sticky="ew")
 
-        self.product_combo.bind(
-            "<KeyRelease>",
-            self.autofill_product_details
-        )
+        tk.Label(product_frame, text="MRP:", font=("Arial", 10, "bold")).grid(row=1, column=2, padx=4, pady=3, sticky="w")
+        self.mrp_entry = tk.Entry(product_frame, width=8, state="readonly", font=("Arial", 11, "bold"), justify="center")
+        self.mrp_entry.grid(row=1, column=3, padx=4, pady=3, ipady=2, sticky="ew")
 
-        self.product_combo.bind(
-            "<<ComboboxSelected>>",
-            self.autofill_product_details
-        )
+        tk.Label(product_frame, text="Price:", font=("Arial", 10, "bold")).grid(row=1, column=4, padx=4, pady=3, sticky="w")
+        self.price_entry = tk.Entry(product_frame, width=8, font=("Arial", 11, "bold"), justify="center")
+        self.price_entry.grid(row=1, column=5, padx=4, pady=3, ipady=2, sticky="ew")
 
-        self.product_combo.bind(
-            "<FocusOut>",
-            self.autofill_product_details
-        )
+        tk.Label(product_frame, text="Unit:", font=("Arial", 10, "bold")).grid(row=1, column=6, padx=4, pady=3, sticky="w")
+        self.unit_entry = tk.Entry(product_frame, width=6, state="readonly", font=("Arial", 11, "bold"), justify="center")
+        self.unit_entry.grid(row=1, column=7, padx=4, pady=3, ipady=2, sticky="ew")
 
-        # QTY
-
-        tk.Label(
-            product_frame,
-            text="Qty",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=1,
-            column=0,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
-
-        self.qty_entry = tk.Entry(
-            product_frame,
-            width=8,
-            font=("Arial", 12, "bold")
-        )
-
-        self.qty_entry.grid(
-            row=1,
-            column=1,
-            padx=5,
-            pady=4,
-            ipady=4,
-            sticky="ew"
-        )
-
-
-        # MRP
-
-        tk.Label(
-            product_frame,
-            text="MRP",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=1,
-            column=2,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
-
-        self.mrp_entry = tk.Entry(
-            product_frame,
-            width=10,
-            state="readonly",
-            font=("Arial", 12, "bold")
-        )
-
-        self.mrp_entry.grid(
-            row=1,
-            column=3,
-            padx=5,
-            pady=4,
-            ipady=4,
-            sticky="ew"
-        )
-
-        # PRICE
-
-        tk.Label(
-            product_frame,
-            text="Price",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=1,
-            column=4,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
-
-        self.price_entry = tk.Entry(
-            product_frame,
-            width=10,
-            font=("Arial", 12, "bold")
-        )
-
-        self.price_entry.grid(
-            row=1,
-            column=5,
-            padx=5,
-            pady=4,
-            ipady=4,
-            sticky="ew"
-        )
-
-        # UNIT
-
-        tk.Label(
-            product_frame,
-            text="Unit",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=1,
-            column=6,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
-
-        self.unit_entry = tk.Entry(
-            product_frame,
-            width=8,
-            state="readonly",
-            font=("Arial", 12, "bold")
-        )
-
-        self.unit_entry.grid(
-            row=1,
-            column=7,
-            padx=5,
-            pady=4,
-            ipady=4,
-            sticky="ew"
-        )
-
-        # DISCOUNT
-
+        # Row 2: Discount %, Discount Base, Add To Cart Button
         self.discount_base_var = tk.StringVar(value="Price")
 
-        tk.Label(
-            product_frame,
-            text="Discount %",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=2,
-            column=0,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
+        tk.Label(product_frame, text="Disc %:", font=("Arial", 10, "bold")).grid(row=2, column=0, padx=4, pady=3, sticky="w")
+        self.discount_entry = tk.Entry(product_frame, width=6, font=("Arial", 11, "bold"), justify="center")
+        self.discount_entry.insert(0, "0")
+        self.discount_entry.grid(row=2, column=1, padx=4, pady=3, ipady=2, sticky="ew")
 
-        self.discount_entry = tk.Entry(
-            product_frame,
-            width=8,
-            font=("Arial", 12, "bold")
-        )
-
-        self.discount_entry.insert(
-            0,
-            "0"
-        )
-
-        self.discount_entry.grid(
-            row=2,
-            column=1,
-            padx=5,
-            pady=4,
-            ipady=4,
-            sticky="ew"
-        )
-
-        tk.Label(
-            product_frame,
-            text="Discount On",
-            font=("Arial", 13, "bold")
-        ).grid(
-            row=2,
-            column=2,
-            padx=8,
-            pady=6,
-            sticky="w"
-        )
-
+        tk.Label(product_frame, text="Disc On:", font=("Arial", 10, "bold")).grid(row=2, column=2, padx=4, pady=3, sticky="w")
         self.discount_base_label = tk.Label(
             product_frame,
             textvariable=self.discount_base_var,
-            font=("Arial", 12, "bold"),
+            font=("Arial", 10, "bold"),
             fg="#0066cc",
-            anchor="w",
-            width=10
+            anchor="w"
         )
-        self.discount_base_label.grid(
-            row=2,
-            column=3,
-            padx=5,
-            pady=4,
-            sticky="ew"
-        )
-
-        # BUTTON
+        self.discount_base_label.grid(row=2, column=3, padx=4, pady=3, sticky="w")
 
         self.add_btn = tk.Button(
             product_frame,
-            text="Add To Cart",
-            width=16,
+            text="➕ Add to Bill (Enter)",
             command=self.add_to_cart,
-            bg="#f4a300",
-            fg="black",
-            activebackground="#d68e00",
+            bg="#28a745",
+            fg="white",
+            activebackground="#218838",
             relief="raised",
-            bd=3,
-            padx=8,
-            pady=4,
-            font=("Arial", 11, "bold"),
+            bd=2,
+            padx=14,
+            pady=3,
+            font=("Arial", 10, "bold")
         )
-
-        self.add_btn.grid(
-            row=2,
-            column=4,
-            columnspan=2,
-            padx=10,
-            pady=4,
-            sticky="e"
-        )
-        
-        self.canvas = canvas
-
-        self.canvas.bind_all(
-            "<MouseWheel>",
-            self._on_mousewheel
-        )
+        self.add_btn.grid(row=2, column=4, columnspan=4, padx=6, pady=3, sticky="e")
 
         self.add_btn.bind(
             "<Return>",
@@ -498,72 +230,63 @@ class InvoiceUI:
         )
 
         # =========================
-        # TABLE
+        # 3. CART TABLE WITH INTERNAL SCROLLBAR
         # =========================
 
+        table_frame = tk.Frame(self.frame)
+        table_frame.pack(
+            fill="both",
+            expand=True,
+            padx=4,
+            pady=4
+        )
+
         columns = (
-                "S.No",
-                "Qty",
-                "Product",
-                "MRP",
-                "Price",
-                "Unit",
-                "Discount",
-                "Discount On",
-                "Total",
-                "Edit",
-                "Delete"
-            )
+            "S.No",
+            "Qty",
+            "Product",
+            "MRP",
+            "Price",
+            "Unit",
+            "Discount",
+            "Discount On",
+            "Total",
+            "Edit",
+            "Delete"
+        )
 
         self.tree = ttk.Treeview(
-            self.frame,
+            table_frame,
             columns=columns,
-            show="headings"
+            show="headings",
+            selectmode="browse"
         )
 
         for col in columns:
-
-            self.tree.heading(
-                col,
-                text=col
-            )
-
-            width = 120
-
+            self.tree.heading(col, text=col)
+            width = 100
             if col == "Product":
-                width = 220
+                width = 240
             elif col in ("MRP", "Price"):
-                width = 95
+                width = 90
+            elif col in ("Qty", "Unit", "Discount"):
+                width = 75
             elif col == "Discount On":
-                width = 110
+                width = 95
             elif col in ("Edit", "Delete"):
-                width = 80
+                width = 65
 
-            self.tree.column(
-                col,
-                width=width,
-                anchor="center"
-            )
+            self.tree.column(col, width=width, anchor="center")
 
-        # SMALLER ACTION COLUMNS
-
-        self.tree.column(
-            "Edit",
-            width=85,
-            anchor="center"
+        tree_scroll = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.tree.yview
         )
+        self.tree.configure(yscrollcommand=tree_scroll.set)
 
-        self.tree.column(
-            "Delete",
-            width=85,
-            anchor="center"
-        )
-
-        self.tree.pack(
-            fill="x",
-            padx=12,
-            pady=10
-        )
+        self.tree.pack(side="left", fill="both", expand=True)
+        tree_scroll.pack(side="right", fill="y")
 
         self.tree.bind(
             "<Button-1>",
@@ -571,142 +294,131 @@ class InvoiceUI:
         )
 
         # =========================
-        # BOTTOM
+        # 4. BOTTOM SUMMARY & ACTIONS
         # =========================
 
         bottom_frame = tk.Frame(
-            self.frame
+            self.frame,
+            bg="#f8f9fa",
+            relief="groove",
+            borderwidth=1,
+            padx=10,
+            pady=6
         )
-
         bottom_frame.pack(
             fill="x",
-            padx=12,
-            pady=8
+            padx=4,
+            pady=(2, 4),
+            side="bottom"
         )
+
+        # Line 1: Grand Total, Paid Amount, Pending, Note (ALL in ONE Line)
+        line1 = tk.Frame(bottom_frame, bg="#f8f9fa")
+        line1.pack(fill="x", pady=2)
 
         self.total_label = tk.Label(
-            bottom_frame,
+            line1,
             text="Grand Total: ₹ 0",
-            font=("Arial", 16, "bold")
+            font=("Arial", 14, "bold"),
+            fg="#5634f0",
+            bg="#f8f9fa"
         )
-
-        self.total_label.grid(
-            row=0,
-            column=0,
-            columnspan=2,
-            pady=6
-        )
+        self.total_label.pack(side="left", padx=(4, 15))
 
         tk.Label(
-            bottom_frame,
-            text="Paid Amount",
-            font=("Arial", 12, "bold")
-        ).grid(
-            row=1,
-            column=0,
-            pady=6
-        )
+            line1,
+            text="Paid Amount:",
+            font=("Arial", 11, "bold"),
+            bg="#f8f9fa"
+        ).pack(side="left", padx=(10, 4))
 
         self.paid_entry = tk.Entry(
-            bottom_frame,
-            width=20,
-            font=("Arial", 11, "bold")
+            line1,
+            width=12,
+            font=("Arial", 11, "bold"),
+            justify="center"
         )
+        self.paid_entry.insert(0, "0")
+        self.paid_entry.pack(side="left", padx=4)
 
-        self.paid_entry.insert(
-            0,
-            "0"
-        )
-
-        self.paid_entry.grid(
-            row=1,
-            column=1,
-            pady=6
-        )
-        self.auto_fill_paid = True
-
-        # Update pending when paid amount changes
         self.paid_entry.bind(
             "<KeyRelease>",
             self.on_paid_changed
         )
-
         self.paid_entry.bind(
             "<FocusOut>",
             lambda e: self.update_pending()
         )
 
-        # Pending amount label (calculated from grand total - paid)
         self.pending_label = tk.Label(
-            bottom_frame,
+            line1,
             text="Pending: ₹ 0",
-            font=("Arial", 12, "bold")
+            font=("Arial", 12, "bold"),
+            fg="#28a745",
+            bg="#f8f9fa"
         )
-
-        self.pending_label.grid(
-            row=2,
-            column=0,
-            columnspan=2,
-            pady=5
-        )
+        self.pending_label.pack(side="left", padx=(15, 15))
 
         tk.Label(
-            bottom_frame,
-            text="Note",
-            font=("Arial", 12, "bold")
-        ).grid(
-            row=3,
-            column=0,
-            sticky="nw",
-            pady=6
-        )
+            line1,
+            text="Note:",
+            font=("Arial", 11, "bold"),
+            bg="#f8f9fa"
+        ).pack(side="left", padx=(10, 4))
 
-        self.note_text = tk.Text(
-            bottom_frame,
-            width=40,
-            height=3,
-            font=("Arial", 11)
+        self.note_text = tk.Entry(
+            line1,
+            font=("Arial", 10),
+            width=28
         )
-        self.note_text.grid(
-            row=3,
-            column=1,
-            pady=6,
-            padx=5
-        )
+        self.note_text.pack(side="left", fill="x", expand=True, padx=4)
+
+        # Line 2: Save Invoice Button, Clear Button & Branding
+        line2 = tk.Frame(bottom_frame, bg="#f8f9fa")
+        line2.pack(fill="x", pady=(5, 2))
 
         self.save_btn = tk.Button(
-            bottom_frame,
-            text="Save Invoice + PDF",
-            width=25,
-            height=2,
+            line2,
+            text="💾 Save Invoice + PDF (Enter)",
             command=self.save_invoice,
             fg="white",
             bg="#5634f0",
             activebackground="#3f22c2",
             relief="raised",
             bd=3,
-            padx=10,
-            pady=6,
-            font=("Arial", 11, "bold"),
+            padx=18,
+            pady=4,
+            font=("Arial", 11, "bold")
         )
+        self.save_btn.pack(side="left", padx=(4, 10))
 
-        self.save_btn.grid(
-            row=4,
-            column=0,
-            columnspan=2,
-            pady=10
+        clear_btn = tk.Button(
+            line2,
+            text="🧹 Clear / New Bill",
+            command=self.clear_invoice,
+            fg="#495057",
+            bg="#e9ecef",
+            activebackground="#dde2e6",
+            relief="raised",
+            bd=2,
+            padx=12,
+            pady=4,
+            font=("Arial", 10, "bold")
         )
-        
-        self.canvas = canvas
+        clear_btn.pack(side="left", padx=5)
 
-        self.canvas.bind_all(
-            "<MouseWheel>",
-            self._on_mousewheel
+        branding_label = tk.Label(
+            line2,
+            text="⚡ Powered by Wokdens",
+            font=("Arial", 9, "italic"),
+            fg="#888888",
+            bg="#f8f9fa"
         )
-        
+        branding_label.pack(side="right", padx=10)
+
         self.auto_fill_paid = True
-
         self.restore_state()
+
 
     # =========================
     # CUSTOMERS
@@ -942,50 +654,54 @@ class InvoiceUI:
 
         total = effective_price * quantity
 
-        item = {
+        # Check if identical product is already in cart -> increase count
+        existing_item = None
+        for itm in self.cart_items:
+            if (
+                itm["product_id"] == product[0]
+                and abs(itm["price"] - custom_price) < 0.001
+                and abs(itm["discount"] - discount) < 0.001
+                and itm.get("discount_base", "Price") == discount_base
+            ):
+                existing_item = itm
+                break
 
+        if existing_item:
+            combined_qty = existing_item["quantity"] + quantity
+            if combined_qty > product[4]:
+                messagebox.showerror(
+                    "Out of Stock",
+                    f"Only {product[4]} {unit} available in stock.\nCart already has {existing_item['quantity']} {unit}.",
+                    parent=self.frame.winfo_toplevel()
+                )
+                return
+
+            existing_item["quantity"] = combined_qty
+            existing_item["total"] = effective_price * combined_qty
+            self.refresh_cart_table()
+            self.update_total()
+            self.clear_inputs()
+            self.product_combo.entry.focus_set()
+            self.product_combo.entry.icursor(tk.END)
+            return
+
+        item = {
             "product_id": product[0],
             "name": product_name,
             "quantity": quantity,
             "mrp": mrp,
-            "price":custom_price,
+            "price": custom_price,
             "unit": unit,
             "discount": discount,
             "discount_base": discount_base,
             "total": total
-
         }
 
         self.cart_items.append(item)
-
-        serial_no = len(
-            self.cart_items
-        )
-
-        self.tree.insert(
-            "",
-            "end",
-            values=(
-                serial_no,
-                quantity,
-                product_name,
-                item["mrp"],
-                custom_price,
-                unit,
-                discount,
-                discount_base,
-                total,
-                "✏",
-                "❌"
-            )
-        )
-
+        self.refresh_cart_table()
         self.update_total()
-
         self.clear_inputs()
-        
         self.product_combo.entry.focus_set()
-        
         self.product_combo.entry.icursor(tk.END)
 
     # =========================
@@ -1036,18 +752,10 @@ class InvoiceUI:
             tk.END
         )
 
-        # self.price_entry.config(
-        #     state="normal"
-        # )
-
         self.price_entry.delete(
             0,
             tk.END
         )
-
-        # self.price_entry.config(
-        #     state="readonly"
-        # )
 
         self.unit_entry.delete(
             0,
@@ -1063,6 +771,7 @@ class InvoiceUI:
             0,
             "0"
         )
+
     def clear_invoice(self):
 
         InvoiceUI._saved_state = None
@@ -1070,7 +779,6 @@ class InvoiceUI:
         self.cart_items.clear()
 
         for row in self.tree.get_children():
-
             self.tree.delete(row)
 
         self.customer_combo.set("")
@@ -1078,14 +786,14 @@ class InvoiceUI:
         self.clear_inputs()
 
         self.paid_entry.delete(0, tk.END)
-
         self.paid_entry.insert(0, "0")
 
-        self.note_text.delete("1.0", tk.END)
+        self.note_text.delete(0, tk.END)
 
         self.update_total()
 
     def save_state(self):
+        note_val = self.note_text.get().strip() if hasattr(self.note_text, "get") else ""
         InvoiceUI._saved_state = {
             "cart_items": list(self.cart_items),
             "customer_name": self.customer_combo.get(),
@@ -1097,7 +805,7 @@ class InvoiceUI:
             "discount": self.discount_entry.get(),
             "discount_base": self.discount_base_var.get(),
             "paid_amount": self.paid_entry.get(),
-            "note": self.note_text.get("1.0", "end-1c"),
+            "note": note_val,
             "auto_fill_paid": self.auto_fill_paid,
             "rounded_total": getattr(self, "rounded_total", 0)
         }
@@ -1141,8 +849,8 @@ class InvoiceUI:
         self.paid_entry.delete(0, tk.END)
         self.paid_entry.insert(0, state["paid_amount"])
 
-        self.note_text.delete("1.0", tk.END)
-        self.note_text.insert("1.0", state["note"])
+        self.note_text.delete(0, tk.END)
+        self.note_text.insert(0, state.get("note", ""))
 
         self.update_pending()
 
@@ -1156,7 +864,8 @@ class InvoiceUI:
 
             messagebox.showerror(
                 "Error",
-                "Cart is empty"
+                "Cart is empty",
+                parent=self.frame.winfo_toplevel()
             )
 
             return
@@ -1166,11 +875,17 @@ class InvoiceUI:
             .split(" (")[0]
         )
 
-        paid_amount = float(
-            self.paid_entry.get()
-        )
+        try:
+            paid_amount = float(self.paid_entry.get().strip() or 0)
+        except ValueError:
+            messagebox.showerror(
+                "Invalid Amount",
+                "Please enter a valid paid amount.",
+                parent=self.frame.winfo_toplevel()
+            )
+            return
 
-        note = self.note_text.get("1.0", tk.END).strip()
+        note = self.note_text.get().strip() if hasattr(self.note_text, "get") else ""
 
         # compute and round grand total before saving
         grand_total_raw = sum(
@@ -1197,8 +912,10 @@ class InvoiceUI:
 
         messagebox.showinfo(
             "Success",
-            "Invoice saved successfully"
+            f"Invoice #{invoice_id} saved successfully!\nPDF generated.",
+            parent=self.frame.winfo_toplevel()
         )
+
 
     # =========================
     # PDF
@@ -1610,9 +1327,17 @@ class InvoiceUI:
         else:
             pending_display = pending_amount
 
-        self.pending_label.config(
-            text=f"Pending: ₹ {pending_display}"
-        )
+        if pending_amount > 0:
+            self.pending_label.config(
+                text=f"Pending: ₹ {pending_display}",
+                fg="#d9534f"
+            )
+        else:
+            self.pending_label.config(
+                text=f"Pending: ₹ {pending_display}",
+                fg="#28a745"
+            )
+
         
     def handle_table_click(self, event):
 
