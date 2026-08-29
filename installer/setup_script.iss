@@ -4,6 +4,7 @@
 #define MyAppName "BusinessApp"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Wokdens"
+#define MyAppURL "https://wokdens.com"
 #define MyAppExeName "BusinessApp.exe"
 
 [Setup]
@@ -12,7 +13,9 @@ AppId={{D9A3B657-4E2F-4A92-BF38-9B25A7C12F89}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppPublisherURL=https://wokdens.com
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
 
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
@@ -26,6 +29,13 @@ PrivilegesRequired=lowest
 CloseApplications=yes
 RestartApplications=no
 
+; Version Info embedded into Setup.exe
+VersionInfoVersion=1.0.0.0
+VersionInfoCompany=Wokdens
+VersionInfoDescription=BusinessApp Installation Wizard
+VersionInfoCopyright=Copyright (C) 2026 Powered by wokdens.com
+VersionInfoProductName=BusinessApp
+
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
@@ -34,6 +44,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\dist\BusinessApp\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\certificates\wokdens_codesign.cer"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -42,3 +53,4 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+

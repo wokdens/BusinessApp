@@ -88,12 +88,39 @@ BusinessApp-model-4/
 │   ├── autocomplete_combobox.py # Floating Tally-style autocomplete widget
 │   ├── customer_popup.py      # Customer addition modal
 │   └── admin_auth_dialog.py   # Admin authentication dialog
-├── installer/                 # Inno Setup and build scripts
+├── certificates/              # Code signing certificate & keys
+├── installer/                 # Inno Setup Windows installer script (.iss)
+├── scripts/                   # Code signing and certificate registration scripts
 └── invoices/                  # Output directory for generated PDF estimates
 ```
+
+---
+
+## 🛡️ Production Packaging & Windows SmartScreen Elimination
+
+To distribute the application to client laptops without triggering Windows SmartScreen "Unknown Publisher" / "Install Anyway" warnings:
+
+### 1. Build & Code-Sign Pipeline (1-Click)
+Run the automated build script:
+```cmd
+build_installer.bat
+```
+*(or run `.venv\Scripts\python.exe build_installer.py`)*
+
+This performs the complete pipeline automatically:
+1. **Compiles with `--onedir` & `version.txt`**: Embeds official Wokdens metadata (Company, Product, Version, Copyright) and avoids single-file `%TEMP%` heuristic false positives.
+2. **Applies Authenticode Digital Signature**: Signs `BusinessApp.exe` with timestamping from DigiCert.
+3. **Packages with Inno Setup**: Compiles a modern Windows installer wizard `BusinessApp_Setup_v1.0.exe` in `dist_installer/`.
+
+### 2. Client Laptop One-Time Trust Setup
+For client or trade counter deployments:
+- Run **`scripts\install_certificate.bat`** as Administrator on the client laptop.
+- This registers the Wokdens certificate into Windows `Trusted Root` and `Trusted Publishers` stores.
+- Windows Defender and SmartScreen will permanently recognize **Publisher: Wokdens** and launch smoothly without warnings.
 
 ---
 
 ## 📄 License & Attribution
 - Developed & Maintained by **[wokdens.com](https://wokdens.com)**
 - Dedicated for electrical trade counters, wholesale dealers, and retailers.
+
