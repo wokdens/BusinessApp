@@ -43,11 +43,15 @@ class AutocompleteCombobox(tk.Frame):
         self.entry.bind("<KeyRelease>", self._on_key_release)
         self.entry.bind("<Down>", self._on_down_arrow)
         self.entry.bind("<Up>", self._on_up_arrow)
+        self.entry.bind("<Tab>", self._on_tab_key)
+        self.entry.bind("<Shift-Tab>", self._on_shift_tab_key)
+
         self.entry.bind("<Return>", self._on_enter_pressed)
         self.entry.bind("<KP_Enter>", self._on_enter_pressed)
         self.entry.bind("<Escape>", lambda e: self.hide_popup())
         self.entry.bind("<FocusOut>", self._on_entry_focus_out)
         self.entry.bind("<Button-1>", self._on_entry_clicked)
+
 
     # =========================
     # PUBLIC API & PROPERTIES
@@ -130,8 +134,12 @@ class AutocompleteCombobox(tk.Frame):
         self.listbox.bind("<KP_Enter>", self._on_listbox_enter)
         self.listbox.bind("<Escape>", lambda e: self.hide_popup(focus_entry=True))
         self.listbox.bind("<Up>", self._on_listbox_up)
+        self.listbox.bind("<Tab>", self._on_tab_key)
+        self.listbox.bind("<Shift-Tab>", self._on_shift_tab_key)
+
         self.listbox.bind("<Motion>", self._on_mouse_motion)
         self.listbox.bind("<FocusOut>", self._on_listbox_focus_out)
+
 
     def show_popup(self, matches):
         """Show the floating popup positioned right below the entry."""
@@ -267,6 +275,52 @@ class AutocompleteCombobox(tk.Frame):
         if sel and sel[0] == 0:
             self.entry.focus_set()
             return "break"
+
+    def _on_tab_key(self, event):
+        """Tab key acts like Down Arrow to navigate/cycle search options (Tally style)."""
+        if self.popup and self.popup.winfo_exists() and self.popup.winfo_viewable() and self.listbox and self.listbox.size() > 0:
+            self.listbox.focus_set()
+            sel = self.listbox.curselection()
+            if not sel:
+                nxt = 0
+            else:
+                # Cycle down or advance
+                nxt = min(sel[0] + 1, self.listbox.size() - 1)
+            self.listbox.selection_clear(0, tk.END)
+            self.listbox.selection_set(nxt)
+            self.listbox.activate(nxt)
+            self.listbox.see(nxt)
+            return "break"
+        elif self.completion_list:
+            # If popup is not currently open, open suggestions and select first item
+            typed = self.entry.get().strip().lower()
+            if typed:
+                matches = [item for item in self.completion_list if typed in item.lower()]
+                if matches:
+                    self.show_popup(matches)
+                    if self.listbox:
+                        self.listbox.focus_set()
+                        self.listbox.selection_set(0)
+                        self.listbox.activate(0)
+                    return "break"
+        return None
+
+    def _on_shift_tab_key(self, event):
+        """Shift+Tab key acts like Up Arrow to navigate backwards."""
+        if self.popup and self.popup.winfo_exists() and self.popup.winfo_viewable() and self.listbox:
+            self.listbox.focus_set()
+            sel = self.listbox.curselection()
+            if sel and sel[0] > 0:
+                prev_idx = sel[0] - 1
+                self.listbox.selection_clear(0, tk.END)
+                self.listbox.selection_set(prev_idx)
+                self.listbox.activate(prev_idx)
+                self.listbox.see(prev_idx)
+            else:
+                self.entry.focus_set()
+            return "break"
+        return None
+
 
     def _on_enter_pressed(self, event):
         """Enter key on entry: select first match if popup is visible."""
