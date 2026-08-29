@@ -6,6 +6,8 @@ from tkinter import ttk, messagebox
 
 from database import get_connection, update_invoice_note
 from config import INVOICES_DIR
+from ui.admin_auth_dialog import request_admin_pin
+
 
 
 
@@ -258,7 +260,12 @@ class InvoiceHistoryUI:
             self.open_invoice_pdf()
 
     def edit_note(self, invoice_id):
+        # Security: Require Admin PIN to edit note
+        if not request_admin_pin(self.frame, "modify invoice note"):
+            return
+
         current_values = self.tree.item(invoice_id)["values"]
+
         current_note = current_values[6] if len(current_values) > 6 else ""
 
         dialog = tk.Toplevel(self.frame)

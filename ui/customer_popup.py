@@ -142,6 +142,16 @@ class CustomerPopup:
             padx=10
         )
 
+        # Footer Branding
+        footer = tk.Label(
+            self.window,
+            text="⚡ Powered by Wokdens",
+            font=("Arial", 8, "italic"),
+            fg="#888888"
+        )
+        footer.pack(side="bottom", pady=4)
+
+
     # =========================
     # SAVE CUSTOMER
     # =========================

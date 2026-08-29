@@ -12,6 +12,8 @@ from database import (
 )
 
 from ui.autocomplete_combobox import AutocompleteCombobox
+from ui.admin_auth_dialog import request_admin_pin
+
 
 
 class InventoryUI:
@@ -715,6 +717,19 @@ class InventoryUI:
 
             return
 
+        # Security: Require Admin PIN to modify existing pricing / product info
+        if not request_admin_pin(self.frame, "modify product pricing and details"):
+            return
+
+        try:
+            mrp_val = float(self.mrp_entry.get().strip() or 0)
+            purchase_val = float(self.purchase_entry.get().strip() or 0)
+            selling_val = float(self.selling_entry.get().strip() or 0)
+            stock_val = int(self.stock_entry.get().strip() or 0)
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter valid numeric values for MRP, Purchase Price, Selling Price, and Stock.")
+            return
+
         conn = get_connection()
 
         cursor = conn.cursor()
@@ -732,13 +747,13 @@ class InventoryUI:
             discount_base = ?
         WHERE id = ?
         """, (
-            self.category_combo.get(),
-            self.name_entry.get(),
-            float(self.mrp_entry.get()),
-            self.purchase_entry.get(),
-            float(self.selling_entry.get()),
-            self.unit_entry.get(),
-            int(self.stock_entry.get()),
+            self.category_combo.get().strip() or "General",
+            self.name_entry.get().strip(),
+            mrp_val,
+            purchase_val,
+            selling_val,
+            self.unit_entry.get().strip() or "Pcs",
+            stock_val,
             self.discount_base_combo.get() or "Price",
             self.selected_product_id
         ))
@@ -769,6 +784,10 @@ class InventoryUI:
                 "Select product first"
             )
 
+            return
+
+        # Security: Require Admin PIN to delete product
+        if not request_admin_pin(self.frame, "delete this product from inventory"):
             return
 
         confirm = messagebox.askyesno(
@@ -803,6 +822,7 @@ class InventoryUI:
 
         self.clear_form()
 
+
     # =========================
     # CLEAR FORM FIELDS
     # =========================
@@ -836,6 +856,9 @@ class InventoryUI:
         self.clear_form_fields()
         
     def export_products_csv(self):
+        # Security: Require Admin PIN to export products & pricing data
+        if not request_admin_pin(self.frame, "export full product and pricing catalog to CSV"):
+            return
 
         file_path = filedialog.asksaveasfilename(
             title="Export Inventory",
@@ -877,6 +900,7 @@ class InventoryUI:
 
                 writer = csv.writer(file)
 
+                # Header with Powered by Wokdens metadata
                 writer.writerow([
                     "Category",
                     "Product Name",
@@ -902,11 +926,15 @@ class InventoryUI:
             )  
         
     def import_products_csv(self):
+        # Security: Require Admin PIN to import bulk inventory
+        if not request_admin_pin(self.frame, "import bulk inventory from CSV"):
+            return
 
         file_path = filedialog.askopenfilename(
             title="Select CSV File",
             filetypes=[("CSV Files", "*.csv")]
         )
+
 
         if not file_path:
             return

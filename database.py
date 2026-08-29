@@ -1,9 +1,11 @@
 import sqlite3
 import os
 import time
+import hashlib
 from datetime import datetime, timedelta
 
 from config import DATABASE_PATH, AUTO_BACKUPS_DIR
+
 
 
 
@@ -211,9 +213,20 @@ def run_migrations():
         ADD COLUMN mrp REAL
         """)
 
+    # =========================
+    # APP SETTINGS TABLE
+    # =========================
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    """)
+
     conn.commit()
 
     conn.close()
+
 
 # =========================
 # CREATE TABLES
@@ -283,9 +296,74 @@ def create_tables():
     )
     """)
 
+    # APP SETTINGS & SECURITY
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    """)
+
     conn.commit()
 
     conn.close()
+
+
+# =========================
+# SETTINGS & ADMIN SECURITY
+# =========================
+
+def get_setting(key, default=None):
+    """Retrieve an application setting value by key."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)")
+        cursor.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row[0] if row else default
+    finally:
+        conn.close()
+
+
+def set_setting(key, value):
+    """Save or update an application setting."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)")
+        cursor.execute("""
+        INSERT INTO app_settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        """, (key, str(value)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
+def hash_pin(pin_str):
+    """Generate SHA-256 hash for PIN security."""
+    return hashlib.sha256(str(pin_str).strip().encode("utf-8")).hexdigest()
+
+
+def set_admin_pin(new_pin):
+    """Set or update the Owner/Admin PIN."""
+    pin_hash = hash_pin(new_pin)
+    set_setting("admin_pin_hash", pin_hash)
+
+
+def verify_admin_pin(entered_pin):
+    """Verify if the entered PIN matches the Owner/Admin PIN (Default: 1234)."""
+    stored_hash = get_setting("admin_pin_hash")
+    if not stored_hash:
+        # Default initial PIN is 1234
+        default_hash = hash_pin("1234")
+        set_setting("admin_pin_hash", default_hash)
+        stored_hash = default_hash
+    return hash_pin(entered_pin) == stored_hash
+
 
 
 def reset_application_data():

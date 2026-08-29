@@ -15,7 +15,41 @@ class MainWindow:
 
         self.root.title("Business App")
 
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x780")
+        self.root.minsize(1024, 650)
+
+        # =========================
+        # FOOTER STATUS / BRANDING BAR
+        # =========================
+        footer_frame = tk.Frame(root, bg="#1e222d", height=32)
+        footer_frame.pack(side="bottom", fill="x")
+
+        status_lbl = tk.Label(
+            footer_frame,
+            text=" ● Offline Mode | Ready ",
+            font=("Arial", 9, "bold"),
+            bg="#1e222d",
+            fg="#28a745"
+        )
+        status_lbl.pack(side="left", padx=15, pady=5)
+
+        center_lbl = tk.Label(
+            footer_frame,
+            text="Electrical Wholesale & Retail Management",
+            font=("Arial", 9),
+            bg="#1e222d",
+            fg="#a0aab8"
+        )
+        center_lbl.pack(side="left", expand=True, pady=5)
+
+        branding_lbl = tk.Label(
+            footer_frame,
+            text="⚡ Powered by Wokdens ",
+            font=("Arial", 9, "bold"),
+            bg="#1e222d",
+            fg="#ffcc00"
+        )
+        branding_lbl.pack(side="right", padx=15, pady=5)
 
         # =========================
         # MENU FRAME
@@ -27,6 +61,7 @@ class MainWindow:
             fill="x",
             pady=6
         )
+
 
         # =========================
         # BUTTON COLORS

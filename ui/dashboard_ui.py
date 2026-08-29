@@ -16,7 +16,7 @@ from database import (
 )
 
 from config import DATABASE_PATH, BACKUPS_DIR
-
+from ui.admin_auth_dialog import request_admin_pin, change_admin_pin_dialog
 
 
 class DashboardUI:
@@ -60,28 +60,51 @@ class DashboardUI:
         backup_btn = tk.Button(
             top_btn_frame,
             text="Backup Database",
-            width=20,
+            width=18,
             height=2,
+            bg="#4a90e2",
+            fg="white",
+            font=("Arial", 10, "bold"),
             command=self.backup_database
         )
 
         backup_btn.pack(
             side="left",
-            padx=10
+            padx=8
         )
 
         restore_btn = tk.Button(
             top_btn_frame,
             text="Restore Database",
-            width=20,
+            width=18,
             height=2,
+            bg="#ff6666",
+            fg="white",
+            font=("Arial", 10, "bold"),
             command=self.restore_database
         )
 
         restore_btn.pack(
             side="left",
-            padx=10
+            padx=8
         )
+
+        change_pin_btn = tk.Button(
+            top_btn_frame,
+            text="🔒 Change Admin PIN",
+            width=20,
+            height=2,
+            bg="#343a40",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            command=lambda: change_admin_pin_dialog(self.frame)
+        )
+
+        change_pin_btn.pack(
+            side="left",
+            padx=8
+        )
+
 
         # =========================
         # CARDS
@@ -249,6 +272,10 @@ class DashboardUI:
     # =========================
 
     def restore_database(self):
+
+        # Security: Require Admin PIN to restore database
+        if not request_admin_pin(self.frame, "restore database from backup"):
+            return
 
         try:
 

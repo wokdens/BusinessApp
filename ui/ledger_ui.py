@@ -11,6 +11,8 @@ from database import (
     get_total_pending,
     update_invoice_note
 )
+from ui.admin_auth_dialog import request_admin_pin
+
 
 
 class LedgerUI:
@@ -229,7 +231,7 @@ class LedgerUI:
         self.refresh_invoice_display()
 
     def pay_all_pending_bills(self):
-        """Clear all pending invoices for the selected customer"""
+        """Clear all pending invoices for the selected customer (Admin PIN Required)"""
         customer_name = getattr(self, "current_customer_name", None)
         total_dues = getattr(self, "current_total_dues", 0)
 
@@ -238,6 +240,10 @@ class LedgerUI:
 
         if total_dues <= 0:
             messagebox.showinfo("No Pending Bills", f"{customer_name} has no pending bills")
+            return
+
+        # Security: Require Admin PIN
+        if not request_admin_pin(self.frame, f"clear all pending bills (₹ {total_dues}) of {customer_name}"):
             return
 
         pending_invoices = [invoice for invoice in self.all_invoices if invoice[5] > 0]
@@ -368,6 +374,10 @@ class LedgerUI:
             self.show_payment_dialog(invoice_id)
 
     def edit_invoice_note(self, invoice_id):
+        # Security: Require Admin PIN to edit note
+        if not request_admin_pin(self.frame, "modify invoice note"):
+            return
+
         current_values = self.invoice_tree.item(invoice_id)["values"]
         current_note = current_values[6] if len(current_values) > 6 else ""
 
@@ -414,6 +424,7 @@ class LedgerUI:
             font=("Arial", 11, "bold"),
             width=12
         ).pack(side="left", padx=10)
+
 
     # =========================
     # PAYMENT DIALOG
@@ -561,7 +572,10 @@ class LedgerUI:
         button_frame.pack(fill="x", padx=20, pady=20)
 
         def clear_bill():
-            """Mark the entire bill as paid with confirmation"""
+            """Mark the entire bill as paid with confirmation (Admin PIN Required)"""
+            if not request_admin_pin(dialog, f"clear bill INV-{inv_number} (₹ {pending})"):
+                return
+
             # Confirmation popup - larger and bolder
             confirm_dialog = tk.Toplevel(dialog)
             confirm_dialog.title("Confirm Payment")
@@ -647,6 +661,9 @@ class LedgerUI:
                     messagebox.showerror("Error", f"Payment amount (₹ {pay_partial_amount}) cannot exceed pending (₹ {pending})")
                     return
 
+                if not request_admin_pin(dialog, f"record partial payment of ₹ {pay_partial_amount} for INV-{inv_number}"):
+                    return
+
                 new_paid = paid + pay_partial_amount
                 
                 # Update database
@@ -692,3 +709,4 @@ class LedgerUI:
             width=18
         )
         cancel_btn.pack(side="left", padx=5)
+

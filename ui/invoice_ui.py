@@ -1532,14 +1532,26 @@ class InvoiceUI:
             "Helvetica",
             8
         )
+        pdf.setFillColorRGB(0.3, 0.3, 0.3)
         
         pdf.drawString(
-            230,
-            totals_y - 200,
-            f"GST as per applicable. Order against PO"
+            40,
+            35,
+            "GST as per applicable. Order against PO."
+        )
+
+        pdf.setFont(
+            "Helvetica-Bold",
+            8
+        )
+        pdf.drawString(
+            450,
+            35,
+            "⚡ Powered by Wokdens"
         )
 
         pdf.save()
+
 
         # Attempt to open the generated PDF automatically (Windows)
         try:
