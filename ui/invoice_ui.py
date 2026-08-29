@@ -411,11 +411,12 @@ class InvoiceUI:
 
         branding_label = tk.Label(
             line2,
-            text="⚡ Powered by Wokdens",
+            text="⚡ Powered by wokdens.com",
             font=("Arial", 9, "italic"),
             fg="#888888",
             bg="#f8f9fa"
         )
+
         branding_label.pack(side="right", padx=10)
 
         self.auto_fill_paid = True
@@ -965,7 +966,7 @@ class InvoiceUI:
         invoice_number,
         customer_name,
         grand_total,
-        paid_amount
+        paid_amount=0
     ):
 
         # sanitize customer name for filename
@@ -979,352 +980,233 @@ class InvoiceUI:
             path = os.path.join(INVOICES_DIR, f"INV-{invoice_number}.pdf")
 
         pdf = canvas.Canvas(path)
+        page_width, page_height = 595.27, 841.89  # Standard A4
+
         # =====================================
         # TITLE & SHOP HEADER
         # =====================================
         from database import get_shop_details
         shop = get_shop_details()
 
-        pdf.setFont(
-            "Helvetica-Bold",
-            16
-        )
-        pdf.setFillColorRGB(0.1, 0.1, 0.1)
-        pdf.drawString(
-            50,
-            810,
-            str(shop["name"])
-        )
+        # Shop Name
+        pdf.setFont("Helvetica-Bold", 16)
+        pdf.setFillColorRGB(0.12, 0.14, 0.18)
+        pdf.drawString(40, 805, str(shop["name"]))
 
-        pdf.setFont(
-            "Helvetica",
-            8
-        )
-        pdf.setFillColorRGB(0.35, 0.35, 0.35)
-        pdf.drawString(
-            50,
-            798,
-            f"{shop['address']} | Phone: {shop['phone']}"
-        )
+        # Shop Details Subtitle
+        pdf.setFont("Helvetica", 8.5)
+        pdf.setFillColorRGB(0.35, 0.38, 0.42)
+        pdf.drawString(40, 792, f"{shop['address']}  |  Phone: {shop['phone']}")
 
-        pdf.setFont(
-            "Helvetica-Bold",
-            12
-        )
-        pdf.setFillColorRGB(0, 0, 0.8)
-        pdf.drawString(
-            450,
-            810,
-            "ESTIMATE / INVOICE"
-        )
+        # Header Badge (Right)
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.setFillColorRGB(0.18, 0.32, 0.58)
+        pdf.drawRightString(555, 805, "TAX INVOICE / ESTIMATE")
+
+        pdf.setFont("Helvetica", 9)
+        pdf.setFillColorRGB(0.35, 0.38, 0.42)
+        pdf.drawRightString(555, 792, f"Date: {datetime.now().strftime('%d-%m-%Y  %I:%M %p')}")
+
+        # Top Divider Line
+        pdf.setStrokeColorRGB(0.8, 0.83, 0.88)
+        pdf.setLineWidth(1)
+        pdf.line(40, 780, 555, 780)
 
         # =====================================
-        # HEADER
+        # INVOICE & CUSTOMER INFO BOX
         # =====================================
+        pdf.setFont("Helvetica-Bold", 9.5)
+        pdf.setFillColorRGB(0.2, 0.2, 0.2)
+        pdf.drawString(40, 763, f"Invoice No : INV-{invoice_number}")
 
-        pdf.setFont(
-            "Helvetica",
-            10
-        )
-        
-        pdf.setFillColorRGB(0, 0, 0)
-
-        pdf.drawString(
-            50,
-            775,
-            f"Invoice: INV-{invoice_number}-{customer_name.split(' ')[0].upper()}"
-        )
-
-        pdf.drawString(
-            50,
-            760,
-            f"Customer: {customer_name.upper()}"
-        )
-
-        pdf.drawString(
-            450,
-            775,
-            f"Date: {datetime.now().strftime('%d-%m-%Y')}"
-        )
+        pdf.setFont("Helvetica-Bold", 9.5)
+        pdf.drawString(280, 763, f"Customer : {customer_name.upper()}")
 
         # =====================================
-        # TABLE HEADER
+        # TABLE HEADER (Modern Slate Header)
         # =====================================
+        table_top = 745
+        header_height = 20
+
+        # Background fill for header
+        pdf.setFillColorRGB(0.93, 0.94, 0.97)
+        pdf.rect(40, table_top - header_height, 515, header_height, fill=True, stroke=False)
+
+        # Border for header
+        pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
+        pdf.setLineWidth(0.8)
+        pdf.rect(40, table_top - header_height, 515, header_height, fill=False, stroke=True)
 
         headers = [
-            "S.No",
-            "Qty",
-            "Product",
-            "MRP",
-            "Price",
-            "Unit",
-            "Discount",
-            "Total"
+            ("S.No", 55, "center"),
+            ("Qty", 82, "center"),
+            ("Product Description", 110, "left"),
+            ("MRP", 330, "right"),
+            ("Price", 380, "right"),
+            ("Unit", 415, "center"),
+            ("Discount", 465, "center"),
+            ("Total (Rs.)", 548, "right")
         ]
 
-        # x_positions = [
-        #     40,
-        #     80,
-        #     130,
-        #     320,
-        #     390,
-        #     450,
-        #     520,
-        #     590
-        # ]
-        x_positions = [
-            40,   # S.No
-            80,   # Qty
-            125,  # Product
-            300,  # MRP
-            360,  # Price
-            420,  # Unit
-            475,  # Discount
-            540,  # Total
-        ]
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.setFillColorRGB(0.15, 0.18, 0.25)
 
-        table_top = 690
-
-        # Top line
-        pdf.line(
-            40,
-            table_top,
-            590,
-            table_top
-        )
-
-        # Header bottom line
-        pdf.line(
-            40,
-            table_top - 25,
-            590,
-            table_top - 25
-        )
-
-        pdf.setFont(
-            "Helvetica-Bold",
-            11
-        )
-        
-
-        for i, header in enumerate(headers):
-
-            pdf.drawString(
-                x_positions[i] + 5,
-                table_top - 17,
-                header
-            )
-            
-        
+        for title, x_pos, align in headers:
+            if align == "center":
+                pdf.drawCentredString(x_pos, table_top - 14, title)
+            elif align == "right":
+                pdf.drawRightString(x_pos, table_top - 14, title)
+            else:
+                pdf.drawString(x_pos, table_top - 14, title)
 
         # =====================================
-        # TABLE ROWS
+        # TABLE ROWS (Compact Tight Spacing)
         # =====================================
-
-        current_y = table_top - 45
-
-        pdf.setFont(
-            "Helvetica",
-            10
-        )
-
+        current_y = table_top - header_height - 13
         serial = 1
 
         for item in self.cart_items:
+            wrapped_product = textwrap.wrap(item["name"], width=32)
+            lines_count = len(wrapped_product)
+            # Compact row height: 16pt for 1 line, +10pt for extra lines
+            row_height = 16 if lines_count <= 1 else (lines_count * 11 + 5)
 
-            wrapped_product = textwrap.wrap(
-                item["name"],
-                width=24
-            )
+            # Check for page overflow
+            if current_y - row_height < 110:
+                pdf.showPage()
+                current_y = 800
+                pdf.setFont("Helvetica", 8.5)
 
-            row_height = max(
-                25,
-                len(wrapped_product) * 12
-            )
+            # Row background alternating subtle shading
+            if serial % 2 == 0:
+                pdf.setFillColorRGB(0.98, 0.98, 0.99)
+                pdf.rect(40, current_y - row_height + 11, 515, row_height, fill=True, stroke=False)
 
-            # S.No
-            pdf.drawString(
-                x_positions[0] + 5,
-                current_y,
-                str(serial)
-            )
+            pdf.setFont("Helvetica", 8.5)
+            pdf.setFillColorRGB(0.15, 0.15, 0.15)
 
-            # Qty
-            pdf.drawString(
-                x_positions[1] + 5,
-                current_y,
-                str(item["quantity"])
-            )
+            # 1. S.No
+            pdf.drawCentredString(55, current_y, str(serial))
 
-            # Product
+            # 2. Qty
+            pdf.setFont("Helvetica-Bold", 8.5)
+            pdf.drawCentredString(82, current_y, str(item["quantity"]))
+            pdf.setFont("Helvetica", 8.5)
+
+            # 3. Product Description (Multi-line safe)
             yy = current_y
-
             for line in wrapped_product:
+                pdf.drawString(110, yy, line)
+                yy -= 11
 
-                pdf.drawString(
-                    x_positions[2] + 5,
-                    yy,
-                    line
-                )
+            # 4. MRP
+            mrp_val = float(item.get("mrp", 0))
+            pdf.drawRightString(330, current_y, f"{mrp_val:,.1f}" if mrp_val > 0 else "-")
 
-                yy -= 12
+            # 5. Price
+            price_val = float(item.get("price", 0))
+            pdf.drawRightString(380, current_y, f"{price_val:,.2f}")
 
-            # # Price
-            # pdf.drawString(
-            #     x_positions[3] + 5,
-            #     current_y,
-            #     str(item["price"])
-            # )
+            # 6. Unit
+            pdf.drawCentredString(415, current_y, str(item["unit"] or "Pcs"))
 
-            # # Unit
-            # pdf.drawString(
-            #     x_positions[4] + 5,
-            #     current_y,
-            #     str(item["unit"])
-            # )
-
-            # # Discount
-            # pdf.drawString(
-            #     x_positions[5] + 5,
-            #     current_y,
-            #     str(item["discount"])
-            # )
-
-            # # Total
-            # pdf.drawString(
-            #     x_positions[6] + 5,
-            #     current_y,
-            #     str(item["total"])
-            # )
-            
-                        # MRP
-            pdf.drawString(
-                x_positions[3] + 5,
-                current_y,
-                str(item["mrp"])
-            )
-
-            # Price
-            pdf.drawString(
-                x_positions[4] + 5,
-                current_y,
-                str(item["price"])
-            )
-
-            # Unit
-            pdf.drawString(
-                x_positions[5] + 5,
-                current_y,
-                str(item["unit"] or "")
-            )
-
-            # Discount
-            discount_value = float(item["discount"])
-
-            if discount_value.is_integer():
-                discount_text = f'{int(discount_value)}% on {item.get("discount_base", "Price")}'
+            # 7. Discount
+            discount_value = float(item.get("discount", 0))
+            if discount_value > 0:
+                disc_base = item.get("discount_base", "Price")
+                disc_str = f"{int(discount_value) if discount_value.is_integer() else discount_value}% on {disc_base}"
             else:
-                discount_text = f'{discount_value}% on {item.get("discount_base", "Price")}'
+                disc_str = "0%"
+            pdf.drawCentredString(465, current_y, disc_str)
 
-            pdf.drawString(
-                x_positions[6] + 5,
-                current_y,
-                discount_text
-            )
+            # 8. Total
+            total_val = float(item.get("total", 0))
+            pdf.setFont("Helvetica-Bold", 8.5)
+            pdf.drawRightString(548, current_y, f"{total_val:,.2f}")
+            pdf.setFont("Helvetica", 8.5)
 
-            # Total
-            pdf.drawString(
-                x_positions[7] + 5,
-                current_y,
-                str(round(item["total"], 2))
-            )
+            # Bottom row divider line
+            pdf.setStrokeColorRGB(0.9, 0.91, 0.94)
+            pdf.setLineWidth(0.5)
+            pdf.line(40, current_y - row_height + 11, 555, current_y - row_height + 11)
 
             current_y -= row_height
-
             serial += 1
 
-        # =====================================
-        # TABLE BOTTOM
-        # =====================================
+        # Table outer border
+        table_bottom = current_y + 11
+        pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
+        pdf.setLineWidth(0.8)
+        pdf.rect(40, table_bottom, 515, (table_top - table_bottom), fill=False, stroke=True)
 
-        table_bottom = current_y + 10
-
-        pdf.line(
-            40,
-            table_bottom,
-            590,
-            table_bottom
-        )
-
-        # =====================================
-        # VERTICAL LINES
-        # =====================================
-
-        for x in x_positions:
-
-            pdf.line(
-                x,
-                table_top,
-                x,
-                table_bottom
-            )
+        # Vertical Column Divider Lines
+        v_dividers = [70, 95, 290, 340, 395, 435, 495]
+        pdf.setStrokeColorRGB(0.88, 0.89, 0.92)
+        pdf.setLineWidth(0.5)
+        for vx in v_dividers:
+            pdf.line(vx, table_top, vx, table_bottom)
 
         # =====================================
-        # TOTALS
+        # SUMMARY SECTION (TOTAL ONLY - NO PENDING/PAID)
         # =====================================
+        summary_y = table_bottom - 18
 
-        totals_y = table_bottom - 50
+        # Left Remarks / Note
+        note_str = getattr(self, "note_text", None)
+        note_val = note_str.get().strip() if (note_str and hasattr(note_str, "get")) else ""
+        if note_val:
+            pdf.setFont("Helvetica-Bold", 8.5)
+            pdf.setFillColorRGB(0.2, 0.2, 0.2)
+            pdf.drawString(45, summary_y - 2, f"Note / Remarks: {note_val}")
 
-        pending_amount = (
-            grand_total - paid_amount
-        )
+        # Grand Total Box (Right Aligned Accent Box)
+        total_box_width = 200
+        total_box_height = 32
+        total_box_x = 355
+        total_box_y = summary_y - total_box_height + 10
 
-        pdf.setFont(
-            "Helvetica-Bold",
-            10
-        )
+        pdf.setFillColorRGB(0.94, 0.96, 1.0)
+        pdf.rect(total_box_x, total_box_y, total_box_width, total_box_height, fill=True, stroke=False)
+        pdf.setStrokeColorRGB(0.2, 0.35, 0.65)
+        pdf.setLineWidth(1)
+        pdf.rect(total_box_x, total_box_y, total_box_width, total_box_height, fill=False, stroke=True)
 
-        pdf.drawString(
-            430,
-            totals_y,
-            f"Grand Total : Rs. {grand_total}"
-        )
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.setFillColorRGB(0.1, 0.2, 0.5)
+        pdf.drawRightString(total_box_x + total_box_width - 10, total_box_y + 10, f"Grand Total:  Rs. {grand_total:,.2f}")
 
-        pdf.drawString(
-            430,
-            totals_y - 25,
-            f"Paid Amount : Rs. {paid_amount}"
-        )
+        # =====================================
+        # FOOTER & AUTHORIZED SIGNATURE
+        # =====================================
+        footer_y = max(35, total_box_y - 50)
 
-        pdf.drawString(
-            430,
-            totals_y - 50,
-            f"Pending Amount : Rs. {pending_amount}"
-        )
-        
-        pdf.setFont(
-            "Helvetica",
-            8
-        )
-        pdf.setFillColorRGB(0.3, 0.3, 0.3)
-        
-        pdf.drawString(
-            40,
-            35,
-            "GST as per applicable. Order against PO."
-        )
+        pdf.setFont("Helvetica", 7.5)
+        pdf.setFillColorRGB(0.4, 0.4, 0.4)
+        pdf.drawString(40, footer_y + 12, "• Terms: Goods once sold will not be returned without original bill.")
+        pdf.drawString(40, footer_y + 2, "• Subject to local shop jurisdiction.")
 
-        pdf.setFont(
-            "Helvetica-Bold",
-            8
-        )
-        pdf.drawString(
-            450,
-            35,
-            "⚡ Powered by Wokdens"
-        )
+        # Signatory
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.setFillColorRGB(0.2, 0.2, 0.2)
+        pdf.drawRightString(555, footer_y + 12, f"For {shop['name']}")
+        pdf.setFont("Helvetica", 7.5)
+        pdf.drawRightString(555, footer_y + 2, "Authorized Signatory")
+
+        # Bottom Branding
+        pdf.setStrokeColorRGB(0.85, 0.88, 0.92)
+        pdf.setLineWidth(0.5)
+        pdf.line(40, 22, 555, 22)
+
+        pdf.setFont("Helvetica", 7.5)
+        pdf.setFillColorRGB(0.45, 0.45, 0.45)
+        pdf.drawString(40, 12, "Thank you for your business!")
+
+        pdf.setFont("Helvetica-Bold", 7.5)
+        pdf.setFillColorRGB(0.35, 0.35, 0.35)
+        pdf.drawRightString(555, 12, "⚡ Powered by wokdens.com")
 
         pdf.save()
+
 
 
         # Attempt to open the generated PDF automatically (Windows)

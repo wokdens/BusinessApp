@@ -431,10 +431,11 @@ class DashboardUI:
 
         tk.Label(
             dialog,
-            text="⚡ Powered by Wokdens",
+            text="⚡ Powered by wokdens.com",
             font=("Arial", 8, "italic"),
             fg="#888888"
         ).pack(side="bottom", pady=4)
+
 
 
     # =========================
@@ -535,11 +536,12 @@ class DashboardUI:
 
         footer = tk.Label(
             dialog,
-            text="⚡ Powered by Wokdens",
+            text="⚡ Powered by wokdens.com",
             font=("Arial", 8, "italic"),
             fg="#888888"
         )
         footer.pack(side="bottom", pady=4)
+
 
 
 
@@ -778,7 +780,7 @@ class DashboardUI:
                 pdf.setFont("Helvetica-Bold", 8)
                 pdf.setFillColorRGB(0.5, 0.5, 0.5)
                 pdf.drawString(40, 32, "Confidential - Business Management Daily Audit")
-                pdf.drawRightString(width - 40, 32, "⚡ Powered by Wokdens")
+                pdf.drawRightString(width - 40, 32, "⚡ Powered by wokdens.com")
 
                 pdf.save()
 
@@ -816,7 +818,7 @@ class DashboardUI:
         # Footer Branding
         tk.Label(
             dialog,
-            text="⚡ Powered by Wokdens",
+            text="⚡ Powered by wokdens.com",
             font=("Arial", 8, "italic"),
             fg="#888888"
         ).pack(side="bottom", pady=4)

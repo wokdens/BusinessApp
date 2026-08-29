@@ -1,7 +1,8 @@
-﻿@echo off
+@echo off
 echo ===================================================
-echo   Building BusinessApp (Powered by Wokdens)
+echo   Building BusinessApp (Powered by wokdens.com)
 echo ===================================================
+
 
 echo [1/3] Cleaning previous build artifacts...
 rmdir /s /q build 2>nul

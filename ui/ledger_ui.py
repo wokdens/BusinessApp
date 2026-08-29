@@ -524,7 +524,7 @@ class LedgerUI:
                     pdf.line(40, 45, width - 40, 45)
                     pdf.setFont("Helvetica-Bold", 8)
                     pdf.setFillColorRGB(0.5, 0.5, 0.5)
-                    pdf.drawRightString(width - 40, 32, "⚡ Powered by Wokdens")
+                    pdf.drawRightString(width - 40, 32, "⚡ Powered by wokdens.com")
 
                     pdf.showPage()
                     y = height - 60
@@ -564,7 +564,8 @@ class LedgerUI:
             pdf.setFillColorRGB(0.4, 0.4, 0.4)
             pdf.drawString(40, 32, "Please verify all transactions and clear outstanding dues promptly.")
             pdf.setFont("Helvetica-Bold", 8)
-            pdf.drawRightString(width - 40, 32, "⚡ Powered by Wokdens")
+            pdf.drawRightString(width - 40, 32, "⚡ Powered by wokdens.com")
+
 
             pdf.save()
 

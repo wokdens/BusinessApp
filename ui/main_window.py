@@ -46,11 +46,12 @@ class MainWindow:
 
         branding_lbl = tk.Label(
             footer_frame,
-            text="⚡ Powered by Wokdens ",
+            text="⚡ Powered by wokdens.com ",
             font=("Arial", 9, "bold"),
             bg="#1e222d",
             fg="#ffcc00"
         )
+
         branding_lbl.pack(side="right", padx=15, pady=5)
 
         # =========================

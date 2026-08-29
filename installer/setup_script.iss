@@ -1,5 +1,5 @@
-﻿; Inno Setup Script for BusinessApp
-; Powered by Wokdens
+; Inno Setup Script for BusinessApp
+; Powered by wokdens.com
 
 #define MyAppName "BusinessApp"
 #define MyAppVersion "1.0.0"
@@ -12,7 +12,8 @@ AppId={{D9A3B657-4E2F-4A92-BF38-9B25A7C12F89}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppPublisherURL=https://github.com/wokdens
+AppPublisherURL=https://wokdens.com
+
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes

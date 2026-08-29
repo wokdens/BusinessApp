@@ -204,10 +204,11 @@ def request_admin_pin(parent, action_name="perform this action", allow_session_u
     # Footer Branding
     footer = tk.Label(
         dialog,
-        text="⚡ Powered by Wokdens",
+        text="⚡ Powered by wokdens.com",
         font=("Arial", 8, "italic"),
         fg="#888888"
     )
+
     footer.pack(side="bottom", pady=4)
 
     dialog.wait_window()
@@ -310,8 +311,9 @@ def change_admin_pin_dialog(parent):
     # Footer Branding
     footer = tk.Label(
         dialog,
-        text="⚡ Powered by Wokdens",
+        text="⚡ Powered by wokdens.com",
         font=("Arial", 8, "italic"),
         fg="#888888"
     )
+
     footer.pack(side="bottom", pady=4)
