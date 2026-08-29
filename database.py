@@ -1,7 +1,10 @@
 import sqlite3
 import os
+import time
+from datetime import datetime, timedelta
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, AUTO_BACKUPS_DIR
+
 
 
 # =========================
@@ -665,7 +668,14 @@ def save_complete_invoice(
 
     conn.close()
 
+    # Trigger silent auto-backup after invoice is committed
+    try:
+        trigger_auto_backup(reason="invoice")
+    except Exception:
+        pass
+
     return invoice_number
+
 
 
 # =========================
@@ -1165,4 +1175,84 @@ def restore_database_from_file(backup_file_path):
     finally:
         source_conn.close()
         dest_conn.close()
+
+
+def clean_old_auto_backups(retention_days=30, max_backups=60):
+    """
+    Automatically purges auto-backups older than retention_days or beyond max_backups limit
+    to prevent disk space exhaustion over years of usage on offline laptops.
+    """
+    try:
+        if not os.path.exists(AUTO_BACKUPS_DIR):
+            return
+
+        cutoff_time = time.time() - (retention_days * 86400)
+        backup_files = []
+
+        for fname in os.listdir(AUTO_BACKUPS_DIR):
+            if fname.startswith("auto_backup_") and fname.endswith(".db"):
+                fpath = os.path.join(AUTO_BACKUPS_DIR, fname)
+                try:
+                    mtime = os.path.getmtime(fpath)
+                    backup_files.append((fpath, mtime))
+                except Exception:
+                    pass
+
+        # Sort newest first
+        backup_files.sort(key=lambda x: x[1], reverse=True)
+
+        for i, (fpath, mtime) in enumerate(backup_files):
+            # Delete if older than retention_days AND beyond minimum 10 retained backups, or if exceeds max_backups
+            if (mtime < cutoff_time and i >= 10) or i >= max_backups:
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Error during auto-backup cleanup: {e}")
+
+
+def trigger_auto_backup(reason="daily"):
+    """
+    Performs an automatic silent backup of the database to the rolling auto-backups directory.
+    Reasons: 'daily' (on app start), 'invoice' (after invoice save), or 'manual'.
+    """
+    try:
+        os.makedirs(AUTO_BACKUPS_DIR, exist_ok=True)
+        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"auto_backup_{now_str}_{reason}.db"
+        backup_path = os.path.join(AUTO_BACKUPS_DIR, backup_filename)
+
+        backup_database_to_file(backup_path)
+        clean_old_auto_backups()
+        return backup_path
+    except Exception as e:
+        print(f"Auto-backup ({reason}) notice: {e}")
+        return None
+
+
+def close_database_on_exit():
+    """
+    Executes a WAL truncate checkpoint and database integrity check on clean application exit.
+    Ensures that WAL file changes are safely flushed into the main database file.
+    """
+    try:
+        if not os.path.exists(DATABASE_PATH):
+            return "no_database"
+
+        conn = get_connection()
+        try:
+            # Checkpoint WAL cleanly into the primary DB file
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA integrity_check")
+            row = cursor.fetchone()
+            status = row[0] if row else "ok"
+            return status
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Database exit check error: {e}")
+        return str(e)
+
 

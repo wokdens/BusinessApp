@@ -14,8 +14,16 @@ DB_DIR = os.path.join(BASE_DIR, "database")
 INVOICES_DIR = os.path.join(BASE_DIR, "invoices")
 BACKUPS_DIR = os.path.join(BASE_DIR, "backups")
 
+# Dedicated rolling auto-backups directory in LocalAppData (safe from application directory changes)
+local_app_data = os.environ.get("LOCALAPPDATA")
+if local_app_data:
+    AUTO_BACKUPS_DIR = os.path.join(local_app_data, "BusinessApp", "Backups")
+else:
+    AUTO_BACKUPS_DIR = os.path.join(BACKUPS_DIR, "auto")
+
 os.makedirs(DB_DIR, exist_ok=True)
 os.makedirs(INVOICES_DIR, exist_ok=True)
 os.makedirs(BACKUPS_DIR, exist_ok=True)
+os.makedirs(AUTO_BACKUPS_DIR, exist_ok=True)
 
 DATABASE_PATH = os.path.join(DB_DIR, "business.db")
