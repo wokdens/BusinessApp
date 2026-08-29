@@ -508,14 +508,15 @@ def set_admin_pin(new_pin):
 
 
 def verify_admin_pin(entered_pin):
-    """Verify if the entered PIN matches the Owner/Admin PIN (Default: 1234)."""
+    """Verify if the entered PIN matches the Owner/Admin PIN (Default: 8160)."""
     stored_hash = get_setting("admin_pin_hash")
     if not stored_hash:
-        # Default initial PIN is 1234
-        default_hash = hash_pin("1234")
+        # Default initial PIN is 8160
+        default_hash = hash_pin("8160")
         set_setting("admin_pin_hash", default_hash)
         stored_hash = default_hash
     return hash_pin(entered_pin) == stored_hash
+
 
 
 
