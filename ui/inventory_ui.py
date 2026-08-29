@@ -10,8 +10,10 @@ from database import (
     get_all_categories,
     add_category,
     record_stock_adjustment,
-    record_audit_log
+    record_audit_log,
+    trigger_auto_backup
 )
+
 
 from ui.autocomplete_combobox import AutocompleteCombobox
 from ui.admin_auth_dialog import request_admin_pin, is_admin_mode
@@ -359,52 +361,64 @@ class InventoryUI:
         tk.Button(
             btn_frame,
             text="Add Product",
-            width=15,
+            width=13,
             command=self.save_product,
             fg="white",
             bg="#5634f0",
             font=("Arial", 10, "bold")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         tk.Button(
             btn_frame,
             text="Update Product",
-            width=15,
+            width=14,
             command=self.update_product,
             fg="white",
             bg="#5634f0",
             font=("Arial", 10, "bold")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         tk.Button(
             btn_frame,
             text="Delete Product",
-            width=15,
+            width=13,
             command=self.delete_product,
             fg="white",
             bg="#ea1b1b",
             font=("Arial", 10, "bold")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         tk.Button(
             btn_frame,
-            text="⚠️ Stock Adjustment",
-            width=18,
+            text="⚠️ Stock Adjust",
+            width=14,
             command=self.open_stock_adjustment_dialog,
             fg="white",
             bg="#fd7e14",
             font=("Arial", 10, "bold")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
 
         tk.Button(
             btn_frame,
-            text="Clear",
-            width=12,
+            text="Clear Form",
+            width=11,
             command=self.clear_form,
             fg="white",
             bg="#6c757d",
             font=("Arial", 10, "bold")
-        ).pack(side="left", padx=5)
+        ).pack(side="left", padx=4)
+
+        tk.Button(
+            btn_frame,
+            text="🗑️ Clear Inventory",
+            width=16,
+            command=self.clear_entire_inventory,
+            fg="white",
+            bg="#c82333",
+            activebackground="#a71d2a",
+            font=("Arial", 10, "bold")
+        ).pack(side="left", padx=4)
+
 
 
         # =========================
@@ -922,11 +936,92 @@ class InventoryUI:
 
         self.clear_form()
 
+    # =========================
+    # CLEAR ENTIRE INVENTORY (ADMIN ONLY)
+    # =========================
 
+    def clear_entire_inventory(self):
+        """Clear all products from inventory (Admin PIN Protected with auto-backup & double confirmation)."""
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM products")
+        total_count = cursor.fetchone()[0]
+        conn.close()
+
+        if total_count == 0:
+            messagebox.showinfo(
+                "Inventory Empty",
+                "The inventory is already empty. There are no products to clear.",
+                parent=self.frame.winfo_toplevel()
+            )
+            return
+
+        # Security: Require Admin PIN
+        if not request_admin_pin(self.frame, f"CLEAR & DELETE ALL {total_count} products from inventory"):
+            return
+
+        # Confirmation Dialog 1
+        confirm1 = messagebox.askyesno(
+            "⚠️ DANGER: Clear Entire Inventory",
+            f"Are you sure you want to permanently delete ALL {total_count} products from the inventory?\n\n"
+            f"• All product records, rates, MRPs, and stock counts will be erased.\n"
+            f"• An automatic safety backup will be created before deletion.\n\n"
+            f"Do you want to proceed?",
+            parent=self.frame.winfo_toplevel(),
+            icon="warning"
+        )
+        if not confirm1:
+            return
+
+        # Final Confirmation Dialog 2
+        confirm2 = messagebox.askyesno(
+            "Final Confirmation - Clear Inventory",
+            f"FINAL WARNING:\n\nThis will permanently delete {total_count} products!\n\n"
+            f"Are you 100% certain you want to proceed?",
+            parent=self.frame.winfo_toplevel(),
+            icon="warning"
+        )
+        if not confirm2:
+            return
+
+        try:
+            # 1. Trigger automatic safety backup
+            backup_file = trigger_auto_backup(reason="pre_clear_inventory")
+
+            # 2. Delete all products
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM products")
+            conn.commit()
+            conn.close()
+
+            # 3. Record Audit Log
+            record_audit_log(
+                "CLEAR_INVENTORY",
+                f"Admin cleared entire inventory ({total_count} products deleted). Pre-clear backup saved at {backup_file}"
+            )
+
+            # 4. Refresh UI
+            self.clear_form()
+            self.load_products()
+
+            messagebox.showinfo(
+                "Inventory Cleared",
+                f"All {total_count} products have been cleared from the inventory.\n\n"
+                f"Safety backup created successfully.",
+                parent=self.frame.winfo_toplevel()
+            )
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"Failed to clear inventory: {e}",
+                parent=self.frame.winfo_toplevel()
+            )
 
     # =========================
     # CLEAR FORM FIELDS
     # =========================
+
 
     def clear_form_fields(self):
 
