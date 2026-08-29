@@ -558,26 +558,10 @@ class InvoiceUI:
         if not selected:
             return
 
-        if " - " in selected:
-            product_name = selected.split(
-                " - ",
-                1
-            )[1]
-        else:
-            product_name = selected
-
-        product = (
-            get_product_complete_details(
-                product_name
-            )
-        )
-
+        product = get_product_complete_details(selected)
         if not product:
             return
 
-        # self.price_entry.config(
-        #     state="normal"
-        # )
         self.mrp_entry.config(
             state="normal"
         )
@@ -596,7 +580,6 @@ class InvoiceUI:
             state="readonly"
         )
 
-
         self.price_entry.delete(
             0,
             tk.END
@@ -607,10 +590,7 @@ class InvoiceUI:
             str(product[3])
         )
 
-        # self.price_entry.config(
-        #     state="readonly"
-        # )
-
+        unit = product[5] if (len(product) > 5 and product[5] and str(product[5]).strip()) else "Pcs"
         self.unit_entry.config(
             state="normal"
         )
@@ -620,16 +600,15 @@ class InvoiceUI:
             tk.END
         )
 
-        if len(product) > 5:
-
-            self.unit_entry.insert(
-                0,
-                str(product[5])
-            )
+        self.unit_entry.insert(
+            0,
+            unit
+        )
 
         self.unit_entry.config(
             state="readonly"
         )
+
 
         if len(product) > 6 and product[6]:
             self.discount_base_var.set(product[6])
@@ -703,13 +682,15 @@ class InvoiceUI:
 
             return
 
-        if " - " in selected_product:
-            product_name = selected_product.split(
-                " - ",
-                1
-            )[1]
-        else:
-            product_name = selected_product
+        product = get_product_complete_details(selected_product)
+        if not product:
+            messagebox.showerror(
+                "Product Not Found",
+                "The selected product is not available in inventory."
+            )
+            return
+
+        product_name = product[1]
 
         try:
             quantity = int(self.qty_entry.get())
@@ -729,13 +710,13 @@ class InvoiceUI:
             )
             return
 
-        unit = self.unit_entry.get()
+        unit = self.unit_entry.get().strip()
         if not unit:
-            messagebox.showerror(
-                "Missing Unit",
-                "Unit is missing for the selected product."
-            )
-            return
+            unit = (product[5] if len(product) > 5 and product[5] else "Pcs")
+            self.unit_entry.config(state="normal")
+            self.unit_entry.delete(0, tk.END)
+            self.unit_entry.insert(0, unit)
+            self.unit_entry.config(state="readonly")
 
         try:
             discount = float(self.discount_entry.get())
@@ -748,20 +729,6 @@ class InvoiceUI:
 
         discount_base = self.discount_base_var.get() or "Price"
 
-        product = (
-            get_product_complete_details(
-                product_name
-            )
-        )
-
-        if not product:
-
-            messagebox.showerror(
-                "Product Not Found",
-                "The selected product is not available in inventory."
-            )
-
-            return
 
         if quantity > product[4]:
 
@@ -1501,8 +1468,9 @@ class InvoiceUI:
 
         self.unit_entry.insert(
             0,
-            cart_item["unit"]
+            cart_item.get("unit", "Pcs") or "Pcs"
         )
+
 
         self.unit_entry.config(
             state="readonly"

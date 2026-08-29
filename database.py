@@ -1098,30 +1098,94 @@ def get_total_pending(customer_name):
 
     return result if result else 0
 
-def get_product_complete_details(product_name):
+def get_product_complete_details(product_query, category=None):
+    """
+    Look up complete product details robustly by:
+    1. Category + Name exact match
+    2. 'Category - Name' combined string match
+    3. Name exact match (case-insensitive)
+    4. Name or formatted string fallback matching
+    Always returns: (id, name, mrp, selling_price, stock, unit, discount_base, category)
+    where unit is guaranteed non-empty (defaulting to 'Pcs' if empty/null).
+    """
+    if not product_query:
+        return None
 
+    product_query = str(product_query).strip()
     conn = get_connection()
-
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query_str = """
     SELECT
         id,
         name,
-        mrp,
-        selling_price,
-        stock,
-        unit,
-        COALESCE(discount_base, 'Price')
+        COALESCE(mrp, 0),
+        COALESCE(selling_price, 0),
+        COALESCE(stock, 0),
+        COALESCE(NULLIF(TRIM(unit), ''), 'Pcs') AS unit,
+        COALESCE(discount_base, 'Price'),
+        COALESCE(category, '')
     FROM products
-    WHERE name = ?
-    """, (product_name,))
+    """
 
+    # 1. Direct match with category if provided
+    if category:
+        cursor.execute(query_str + " WHERE category = ? AND name = ? LIMIT 1", (category.strip(), product_query))
+        product = cursor.fetchone()
+        if product:
+            conn.close()
+            return product
+
+    # 2. Check if combined 'Category - Name' matched
+    cursor.execute(query_str + " WHERE (category || ' - ' || name) = ? LIMIT 1", (product_query,))
+    product = cursor.fetchone()
+    if product:
+        conn.close()
+        return product
+
+    # 3. If query contains ' - ', try splitting into category and name
+    if " - " in product_query:
+        parts = product_query.split(" - ")
+        # Try last part as name
+        possible_name = parts[-1].strip()
+        possible_cat = " - ".join(parts[:-1]).strip()
+        cursor.execute(query_str + " WHERE category = ? AND name = ? LIMIT 1", (possible_cat, possible_name))
+        product = cursor.fetchone()
+        if product:
+            conn.close()
+            return product
+
+        # Try first part as category, rest as name
+        possible_cat = parts[0].strip()
+        possible_name = " - ".join(parts[1:]).strip()
+        cursor.execute(query_str + " WHERE category = ? AND name = ? LIMIT 1", (possible_cat, possible_name))
+        product = cursor.fetchone()
+        if product:
+            conn.close()
+            return product
+
+        # Try just possible_name by itself
+        cursor.execute(query_str + " WHERE name = ? COLLATE NOCASE LIMIT 1", (possible_name,))
+        product = cursor.fetchone()
+        if product:
+            conn.close()
+            return product
+
+    # 4. Exact name match (case-insensitive)
+    cursor.execute(query_str + " WHERE name = ? COLLATE NOCASE LIMIT 1", (product_query,))
+    product = cursor.fetchone()
+    if product:
+        conn.close()
+        return product
+
+    # 5. Fallback case-insensitive LIKE search
+    cursor.execute(query_str + " WHERE name LIKE ? OR (category || ' - ' || name) LIKE ? LIMIT 1",
+                   (f"%{product_query}%", f"%{product_query}%"))
     product = cursor.fetchone()
 
     conn.close()
-
     return product
+
 
 
 # =====================================
