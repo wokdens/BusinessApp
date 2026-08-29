@@ -244,6 +244,19 @@ def run_migrations():
     )
     """)
 
+    # =========================
+    # SECURITY AUDIT LOGS TABLE
+    # =========================
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS security_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_type TEXT,
+        description TEXT,
+        authorized_by TEXT DEFAULT 'Owner PIN',
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     conn.commit()
 
     conn.close()
@@ -337,9 +350,21 @@ def create_tables():
     )
     """)
 
+    # SECURITY AUDIT LOGS
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS security_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_type TEXT,
+        description TEXT,
+        authorized_by TEXT DEFAULT 'Owner PIN',
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     conn.commit()
 
     conn.close()
+
 
 
 
@@ -392,11 +417,54 @@ def set_shop_details(name, phone, address):
     set_setting("shop_address", address.strip())
 
 
+# =========================
+# SECURITY AUDIT LOGGING
+# =========================
+
+def record_audit_log(action_type, description, authorized_by="Owner PIN"):
+    """
+    Logs an authorized security event, rate override, payment clearance, or data export.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS security_audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, action_type TEXT, description TEXT, authorized_by TEXT DEFAULT 'Owner PIN', timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+        cursor.execute("""
+        INSERT INTO security_audit_logs (action_type, description, authorized_by, timestamp)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+        """, (action_type, description, authorized_by))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Audit log recording error: {e}")
+
+
+def get_audit_logs(limit=150):
+    """Retrieves recent security audit logs in reverse chronological order."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("CREATE TABLE IF NOT EXISTS security_audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, action_type TEXT, description TEXT, authorized_by TEXT DEFAULT 'Owner PIN', timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+        cursor.execute("""
+        SELECT
+            id,
+            COALESCE(strftime('%d-%m-%Y %I:%M %p', timestamp), timestamp),
+            action_type,
+            description,
+            authorized_by
+        FROM security_audit_logs
+        ORDER BY id DESC
+        LIMIT ?
+        """, (limit,))
+        return cursor.fetchall()
+    finally:
+        conn.close()
 
 
 def hash_pin(pin_str):
     """Generate SHA-256 hash for PIN security."""
     return hashlib.sha256(str(pin_str).strip().encode("utf-8")).hexdigest()
+
 
 
 def set_admin_pin(new_pin):

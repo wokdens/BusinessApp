@@ -1,6 +1,6 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import messagebox
-from database import verify_admin_pin, set_admin_pin
+from database import verify_admin_pin, set_admin_pin, record_audit_log
 
 # ==========================================
 # GLOBAL SESSION STATE (DEFAULT: STAFF MODE)
@@ -55,6 +55,7 @@ def toggle_admin_mode_dialog(parent):
     global _is_admin_mode
     if _is_admin_mode:
         set_admin_mode(False)
+        record_audit_log("ROLE_LOCK", "Switched back to Staff / Operator Mode")
         messagebox.showinfo(
             "Staff Mode Active",
             "Switched to Operator (Staff) Mode.\nSensitive actions and cost prices are now locked.",
@@ -64,6 +65,7 @@ def toggle_admin_mode_dialog(parent):
     else:
         if request_admin_pin(parent, "unlock full Admin / Owner Mode", allow_session_unlock=True):
             set_admin_mode(True)
+            record_audit_log("ROLE_UNLOCK", "Owner unlocked 1-Click Admin Mode")
             messagebox.showinfo(
                 "Admin Mode Unlocked",
                 "Admin (Owner) Mode is now active.\nAll controls, pricing updates, and purchase costs are unlocked.",
@@ -71,6 +73,7 @@ def toggle_admin_mode_dialog(parent):
             )
             return True
         return False
+
 
 
 def request_admin_pin(parent, action_name="perform this action", allow_session_unlock=False):
@@ -275,8 +278,10 @@ def change_admin_pin_dialog(parent):
             return
 
         set_admin_pin(new_pin)
+        record_audit_log("PIN_CHANGED", "Master Owner/Admin PIN was successfully updated")
         messagebox.showinfo("Success", "Admin PIN updated successfully!", parent=dialog)
         dialog.destroy()
+
 
     tk.Button(
         btn_frame,

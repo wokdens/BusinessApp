@@ -267,7 +267,7 @@ class InventoryUI:
         
         tk.Label(
             form_frame,
-            text="Unit"
+            text="Unit (Preset)"
         ).grid(
             row=5,
             column=0,
@@ -275,15 +275,29 @@ class InventoryUI:
             pady=5
         )
 
-        self.unit_entry = tk.Entry(
+        self.unit_entry = ttk.Combobox(
             form_frame,
-            width=30
+            values=(
+                "Pcs",
+                "Coil",
+                "Mtr",
+                "Box",
+                "Nos",
+                "Bundle",
+                "Length",
+                "Set",
+                "Pkt",
+                "Roll"
+            ),
+            width=27
         )
+        self.unit_entry.set("Pcs")
 
         self.unit_entry.grid(
             row=5,
             column=1
         )
+
         # STOCK
         tk.Label(
             form_frame,
@@ -801,6 +815,11 @@ class InventoryUI:
 
         conn.close()
 
+        record_audit_log(
+            "PRICE_OVERRIDE",
+            f"Updated product ID {self.selected_product_id} '{self.name_entry.get().strip()}' - MRP: Rs.{mrp_val}, Selling: Rs.{selling_val}, Cost: Rs.{purchase_val}, Stock: {stock_val} {self.unit_entry.get().strip()}"
+        )
+
         messagebox.showinfo(
             "Success",
             "Product updated successfully"
@@ -838,6 +857,9 @@ class InventoryUI:
         if not confirm:
             return
 
+        p_name = self.name_entry.get().strip()
+        p_id = self.selected_product_id
+
         conn = get_connection()
 
         cursor = conn.cursor()
@@ -846,17 +868,23 @@ class InventoryUI:
         DELETE FROM products
         WHERE id = ?
         """, (
-            self.selected_product_id,
+            p_id,
         ))
 
         conn.commit()
 
         conn.close()
 
+        record_audit_log(
+            "PRODUCT_DELETE",
+            f"Deleted product '{p_name}' (ID: {p_id}) from inventory"
+        )
+
         messagebox.showinfo(
             "Success",
             "Product deleted successfully"
         )
+
 
         self.load_products()
 
@@ -961,10 +989,13 @@ class InventoryUI:
 
                 writer.writerows(products)
 
+            record_audit_log("CSV_EXPORT", f"Exported product inventory catalog ({len(products)} products) to {file_path}")
+
             messagebox.showinfo(
                 "Success",
                 f"Inventory exported successfully!\n\nLocation:\n{file_path}"
             )
+
 
         except Exception as e:
             messagebox.showerror(
@@ -1178,11 +1209,16 @@ class InventoryUI:
 
             try:
                 new_stock = record_stock_adjustment(p_id, adj_type, signed_qty, reason)
+                record_audit_log(
+                    "STOCK_ADJUSTMENT",
+                    f"Product '{p_name}' (ID: {p_id}): {adj_type} {adj_qty} {p_unit}. Reason: {reason or 'None'}"
+                )
                 messagebox.showinfo(
                     "Stock Adjusted",
                     f"Stock updated successfully!\n\nProduct: {p_name}\nAdjustment: {adj_type} {adj_qty}\nNew Stock: {new_stock} {p_unit}",
                     parent=dialog
                 )
+
                 dialog.destroy()
                 self.load_products()
                 self.clear_form()

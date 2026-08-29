@@ -11,8 +11,10 @@ from database import (
     update_invoice_payment,
     get_total_pending,
     update_invoice_note,
-    get_customer_statement_data
+    get_customer_statement_data,
+    record_audit_log
 )
+
 from config import INVOICES_DIR
 from ui.admin_auth_dialog import request_admin_pin
 
@@ -175,6 +177,8 @@ class LedgerUI:
                 for row in customers:
                     writer.writerow([row[0], row[1], row[2]])
 
+            record_audit_log("CSV_EXPORT", f"Exported customer ledger dues ({len(customers)} customers) to {file_path}")
+
             messagebox.showinfo("Export Successful", f"Customer ledger exported successfully to:\n{file_path}")
         except Exception as e:
             messagebox.showerror("Export Error", str(e))
@@ -191,84 +195,126 @@ class LedgerUI:
         for widget in self.frame.winfo_children():
             widget.destroy()
 
-        # =========================
-        # HEADER
-        # =========================
-
+        # Header Frame
         header_frame = tk.Frame(self.frame)
         header_frame.pack(fill="x", padx=20, pady=10)
 
+        # Back Button
         back_btn = tk.Button(
             header_frame,
             text="← Back to Customers",
             command=self.show_customer_list,
-            bg="#ffcc66",
-            font=("Arial", 10, "bold")
+            bg="#f0f0f0",
+            font=("Arial", 10, "bold"),
+            padx=10,
+            pady=5
         )
         back_btn.pack(side="left")
 
-        title = tk.Label(
-            header_frame,
-            text=f"Invoices - {customer_name}",
-            font=("Arial", 18, "bold")
-        )
-        title.pack(side="left", padx=20)
+        # Customer Info
+        info_frame = tk.Frame(header_frame)
+        info_frame.pack(side="left", padx=20)
 
-        total_dues = get_total_pending(customer_name) or 0
+        name_label = tk.Label(
+            info_frame,
+            text=f"Customer: {customer_name}",
+            font=("Arial", 13, "bold"),
+            fg="#333333"
+        )
+        name_label.pack(anchor="w")
+
+        # Calculate Total Pending for this customer
+        invoices = get_customer_invoices(customer_name)
+        total_dues = sum(inv[5] for inv in invoices)
 
         dues_label = tk.Label(
-            header_frame,
+            info_frame,
             text=f"Total Dues: ₹ {total_dues}",
-            font=("Arial", 13, "bold"),
-            fg="red"
+            font=("Arial", 12, "bold"),
+            fg="#d9534f" if total_dues > 0 else "#5cb85c"
         )
-        dues_label.pack(side="left", padx=10)
+        dues_label.pack(anchor="w")
 
+        # Action Buttons on Right
+        action_btn_frame = tk.Frame(header_frame)
+        action_btn_frame.pack(side="right")
+
+        # Export Statement PDF Button
+        statement_btn = tk.Button(
+            action_btn_frame,
+            text="📄 Statement PDF",
+            command=self.export_statement_pdf,
+            bg="#17a2b8",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=12,
+            pady=5
+        )
+        statement_btn.pack(side="left", padx=5)
+
+        # Pay All Bills Button
         pay_all_btn = tk.Button(
-            header_frame,
-            text="Pay All Pending Bills",
+            action_btn_frame,
+            text="Pay All Bills",
             command=self.pay_all_pending_bills,
             bg="#5634f0",
             fg="white",
-            font=("Arial", 11, "bold"),
-            padx=10,
-            pady=4
+            font=("Arial", 10, "bold"),
+            padx=12,
+            pady=5
         )
-        pay_all_btn.pack(side="left", padx=6)
+        pay_all_btn.pack(side="left", padx=5)
 
-        statement_btn = tk.Button(
-            header_frame,
-            text="📄 Statement PDF",
-            command=self.export_statement_pdf,
-            bg="#28a745",
-            fg="white",
-            font=("Arial", 11, "bold"),
-            padx=10,
-            pady=4
-        )
-        statement_btn.pack(side="left", padx=6)
+        # Search / Filter by Date
+        filter_frame = tk.Frame(self.frame)
+        filter_frame.pack(fill="x", padx=20, pady=5)
 
-        # Filter button
-        self.filter_pending_only = False
-        self.filter_btn = tk.Button(
-            header_frame,
-            text="Show Pending Invoices Only",
-            command=self.toggle_invoice_filter,
-            bg="#66ccff",
+        tk.Label(
+            filter_frame,
+            text="Filter Invoices:",
             font=("Arial", 10, "bold")
+        ).pack(side="left")
+
+        self.invoice_search_entry = tk.Entry(
+            filter_frame,
+            width=25,
+            font=("Arial", 10)
         )
-        self.filter_btn.pack(side="right")
+        self.invoice_search_entry.pack(side="left", padx=10)
+        self.invoice_search_entry.bind("<KeyRelease>", self.filter_invoices)
 
+        # Status filter buttons
+        self.status_filter_var = tk.StringVar(value="All")
 
-        # =========================
-        # TABLE
-        # =========================
+        all_radio = tk.Radiobutton(
+            filter_frame,
+            text="All",
+            variable=self.status_filter_var,
+            value="All",
+            command=self.filter_invoices
+        )
+        all_radio.pack(side="left", padx=5)
 
-        columns = ("Invoice No", "Date", "Total", "Paid", "Pending", "Status", "Note")
+        pending_radio = tk.Radiobutton(
+            filter_frame,
+            text="Pending Only",
+            variable=self.status_filter_var,
+            value="Pending",
+            command=self.filter_invoices
+        )
+        pending_radio.pack(side="left", padx=5)
 
-        style = ttk.Style()
-        style.configure("Treeview.Heading", font=("Arial", 11, "bold"))
-        style.configure("Treeview", font=("Arial", 10), rowheight=28)
+        paid_radio = tk.Radiobutton(
+            filter_frame,
+            text="Paid Only",
+            variable=self.status_filter_var,
+            value="Paid",
+            command=self.filter_invoices
+        )
+        paid_radio.pack(side="left", padx=5)
+
+        # Invoices Table
+        columns = ("Invoice ID", "Invoice Number", "Date", "Total", "Paid", "Pending", "Note")
 
         self.invoice_tree = ttk.Treeview(
             self.frame,
@@ -350,6 +396,11 @@ class LedgerUI:
             for invoice in pending_invoices:
                 invoice_id, invoice_number, date_str, total, paid, pending, note = invoice
                 update_invoice_payment(invoice_id, total)
+
+            record_audit_log(
+                "BILL_CLEAR_ALL",
+                f"Cleared all {pending_invoice_count} pending bills (Total dues: Rs.{total_dues}) for customer '{customer_name}'"
+            )
 
             confirm_dialog.destroy()
             messagebox.showinfo("Success", f"All pending bills of {customer_name} cleared successfully")
@@ -849,6 +900,10 @@ class LedgerUI:
             if response:
                 # Update database - set paid to total
                 update_invoice_payment(invoice_id, total)
+                record_audit_log(
+                    "BILL_CLEAR",
+                    f"Cleared full bill INV-{inv_number} (Paid: Rs.{pending}) for customer '{customer_name}'"
+                )
                 messagebox.showinfo("Success", "Bill marked as paid successfully")
                 
                 # Refresh invoice list
@@ -875,6 +930,10 @@ class LedgerUI:
                 
                 # Update database
                 update_invoice_payment(invoice_id, new_paid)
+                record_audit_log(
+                    "PARTIAL_PAYMENT",
+                    f"Paid partial amount Rs.{pay_partial_amount} on bill INV-{inv_number} for customer '{customer_name}' (New Paid: Rs.{new_paid})"
+                )
 
                 messagebox.showinfo("Success", f"Payment of ₹ {pay_partial_amount} recorded successfully")
 
@@ -884,6 +943,7 @@ class LedgerUI:
 
             except ValueError:
                 messagebox.showerror("Error", "Please enter a valid amount")
+
 
         clear_bill_btn = tk.Button(
             button_frame,

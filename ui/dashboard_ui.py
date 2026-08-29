@@ -18,8 +18,11 @@ from database import (
     restore_database_from_file,
     get_daily_sales_and_profit,
     get_shop_details,
-    set_shop_details
+    set_shop_details,
+    get_audit_logs,
+    record_audit_log
 )
+
 
 
 from config import DATABASE_PATH, BACKUPS_DIR, INVOICES_DIR
@@ -144,6 +147,23 @@ class DashboardUI:
             side="left",
             padx=8
         )
+
+        audit_logs_btn = tk.Button(
+            top_btn_frame,
+            text="🛡️ Audit Logs",
+            width=16,
+            height=2,
+            bg="#007bff",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            command=self.show_security_audit_logs
+        )
+
+        audit_logs_btn.pack(
+            side="left",
+            padx=8
+        )
+
 
 
 
@@ -301,6 +321,8 @@ class DashboardUI:
 
             backup_database_to_file(backup_file)
 
+            record_audit_log("DB_BACKUP", f"Created manual database backup at {backup_file}")
+
             messagebox.showinfo(
                 "Success",
                 f"Backup created successfully:\n{backup_file}"
@@ -380,6 +402,7 @@ class DashboardUI:
                 return
 
             set_shop_details(new_name, new_phone, new_address)
+            record_audit_log("SHOP_DETAILS_UPDATE", f"Updated shop details: Name='{new_name}', Phone='{new_phone}', Address='{new_address}'")
             messagebox.showinfo("Saved", "Shop details updated successfully!", parent=dialog)
             dialog.destroy()
 
@@ -415,6 +438,112 @@ class DashboardUI:
 
 
     # =========================
+    # SECURITY AUDIT LOGS MODAL
+    # =========================
+
+    def show_security_audit_logs(self):
+        """Displays timestamped security audit log of all PIN-authorized operations."""
+        if not request_admin_pin(self.frame, "view security audit logs"):
+            return
+
+        logs = get_audit_logs(limit=200)
+
+        dialog = tk.Toplevel(self.frame)
+        dialog.title("Security Audit Logs")
+        dialog.geometry("920x520")
+        dialog.transient(self.frame.winfo_toplevel())
+        dialog.grab_set()
+
+        # Center on screen
+        dialog.update_idletasks()
+        sw = dialog.winfo_screenwidth()
+        sh = dialog.winfo_screenheight()
+        w, h = 920, 520
+        x = (sw - w) // 2
+        y = (sh - h) // 2
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
+
+        header = tk.Frame(dialog, bg="#1e222d", pady=12)
+        header.pack(fill="x")
+        tk.Label(
+            header,
+            text="🛡️ Security Audit Logs & Price Override Trail",
+            font=("Arial", 14, "bold"),
+            bg="#1e222d",
+            fg="white"
+        ).pack(side="left", padx=20)
+
+        def export_audit_csv():
+            file_path = filedialog.asksaveasfilename(
+                title="Export Audit Logs",
+                defaultextension=".csv",
+                filetypes=[("CSV Files", "*.csv")],
+                initialfile="security_audit_logs.csv",
+                parent=dialog
+            )
+            if not file_path:
+                return
+            try:
+                import csv
+                with open(file_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Log ID", "Timestamp", "Action Type", "Event Description", "Authorized By"])
+                    for row in logs:
+                        writer.writerow(row)
+                record_audit_log("CSV_EXPORT", f"Exported security audit logs to {file_path}")
+                messagebox.showinfo("Export Successful", f"Audit logs saved to:\n{file_path}", parent=dialog)
+            except Exception as e:
+                messagebox.showerror("Export Error", str(e), parent=dialog)
+
+        tk.Button(
+            header,
+            text="📥 Export Logs (CSV)",
+            command=export_audit_csv,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 9, "bold"),
+            padx=10,
+            pady=3
+        ).pack(side="right", padx=15)
+
+        # Treeview
+        tree_frame = tk.Frame(dialog, padx=15, pady=10)
+        tree_frame.pack(fill="both", expand=True)
+
+        columns = ("ID", "Timestamp", "Action Type", "Description", "Authorized By")
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
+
+        tree.heading("ID", text="ID", anchor="center")
+        tree.heading("Timestamp", text="Timestamp", anchor="w")
+        tree.heading("Action Type", text="Action Type", anchor="w")
+        tree.heading("Description", text="Description / Details", anchor="w")
+        tree.heading("Authorized By", text="Authorized By", anchor="center")
+
+        tree.column("ID", width=50, anchor="center")
+        tree.column("Timestamp", width=170, anchor="w")
+        tree.column("Action Type", width=150, anchor="w")
+        tree.column("Description", width=420, anchor="w")
+        tree.column("Authorized By", width=110, anchor="center")
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        for log in logs:
+            tree.insert("", "end", values=log)
+
+        footer = tk.Label(
+            dialog,
+            text="⚡ Powered by Wokdens",
+            font=("Arial", 8, "italic"),
+            fg="#888888"
+        )
+        footer.pack(side="bottom", pady=4)
+
+
+
+    # =========================
     # RESTORE DATABASE
     # =========================
 
@@ -447,10 +576,13 @@ class DashboardUI:
 
             restore_database_from_file(backup_file)
 
+            record_audit_log("DB_RESTORE", f"Restored database from backup file {backup_file}")
+
             messagebox.showinfo(
                 "Success",
                 "Database restored successfully.\nPlease restart the application to reload all views."
             )
+
 
         except Exception as e:
 
