@@ -257,9 +257,43 @@ def run_migrations():
     )
     """)
 
+    # =========================
+    # PRODUCTS UNIQUE CONSTRAINT & DEDUPLICATION
+    # =========================
+    try:
+        cursor.execute("""
+            SELECT LOWER(TRIM(COALESCE(category, 'General'))), LOWER(TRIM(name))
+            FROM products
+            GROUP BY LOWER(TRIM(COALESCE(category, 'General'))), LOWER(TRIM(name))
+            HAVING COUNT(id) > 1
+        """)
+        dup_groups = cursor.fetchall()
+        for cat_l, name_l in dup_groups:
+            cursor.execute("""
+                SELECT id, stock FROM products
+                WHERE LOWER(TRIM(COALESCE(category, 'General'))) = ? AND LOWER(TRIM(name)) = ?
+                ORDER BY id ASC
+            """, (cat_l, name_l))
+            dups = cursor.fetchall()
+            if len(dups) > 1:
+                keep_id = dups[0][0]
+                extra_stock = sum(d[1] for d in dups[1:] if d[1] is not None)
+                if extra_stock > 0:
+                    cursor.execute("UPDATE products SET stock = stock + ? WHERE id = ?", (extra_stock, keep_id))
+                for extra in dups[1:]:
+                    cursor.execute("DELETE FROM products WHERE id = ?", (extra[0],))
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_products_unique_cat_name
+            ON products(LOWER(TRIM(COALESCE(category, 'General'))), LOWER(TRIM(name)))
+        """)
+    except Exception as e:
+        print(f"Product unique index notice: {e}")
+
     conn.commit()
 
     conn.close()
+
 
 
 # =========================
@@ -550,7 +584,44 @@ def get_all_categories():
 # PRODUCT FUNCTIONS
 # =========================
 
+def is_product_duplicate(name, category="General", exclude_id=None):
+    """
+    Check if a product with the same category and name already exists (case-insensitive and trimmed).
+    Returns (id, category, name, selling_price, stock, unit) if found, else None.
+    """
+    if not name or not str(name).strip():
+        return None
+
+    cat_clean = (str(category).strip() if category else "General") or "General"
+    name_clean = str(name).strip()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if exclude_id is not None:
+        cursor.execute("""
+            SELECT id, category, name, selling_price, stock, unit
+            FROM products
+            WHERE LOWER(TRIM(COALESCE(category, 'General'))) = LOWER(TRIM(?))
+              AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+              AND id != ?
+            LIMIT 1
+        """, (cat_clean, name_clean, int(exclude_id)))
+    else:
+        cursor.execute("""
+            SELECT id, category, name, selling_price, stock, unit
+            FROM products
+            WHERE LOWER(TRIM(COALESCE(category, 'General'))) = LOWER(TRIM(?))
+              AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+            LIMIT 1
+        """, (cat_clean, name_clean))
+
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
 def add_product(
+
     name,
     mrp,
     purchase_price,

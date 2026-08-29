@@ -11,8 +11,10 @@ from database import (
     add_category,
     record_stock_adjustment,
     record_audit_log,
-    trigger_auto_backup
+    trigger_auto_backup,
+    is_product_duplicate
 )
+
 
 
 from ui.autocomplete_combobox import AutocompleteCombobox
@@ -660,12 +662,11 @@ class InventoryUI:
 
     def save_product(self):
 
-        conn = get_connection()
-
-        cursor = conn.cursor()
+        category = self.category_combo.get().strip() or "General"
+        name = self.name_entry.get().strip()
 
         # Product Name validation
-        if not self.name_entry.get().strip():
+        if not name:
             messagebox.showerror(
                 "Missing Information",
                 "Please enter Product Name.",
@@ -675,14 +676,36 @@ class InventoryUI:
             return
 
         # Unit validation
-        if not self.unit_entry.get().strip():
+        unit = self.unit_entry.get().strip() or "Pcs"
+
+        # Duplicate Check
+        existing = is_product_duplicate(name, category)
+        if existing:
             messagebox.showerror(
-                "Missing Information",
-                "Please enter Unit.",
+                "Duplicate Product",
+                f"Product '{name}' already exists in Category '{category}' (ID: {existing[0]}).\n\n"
+                f"Duplicate products are not allowed.\n"
+                f"Please select the existing product in the table and use 'Update Product' to modify its details or stock.",
                 parent=self.frame.winfo_toplevel()
             )
-            self.unit_entry.focus()
+            self.name_entry.focus()
             return
+
+        try:
+            mrp_val = float(self.mrp_entry.get().strip() or 0)
+            purchase_val = float(self.purchase_entry.get().strip() or 0)
+            selling_val = float(self.selling_entry.get().strip() or 0)
+            stock_val = int(self.stock_entry.get().strip() or 0)
+        except ValueError:
+            messagebox.showerror(
+                "Invalid Input",
+                "Please enter valid numeric values for MRP, Purchase Price, Selling Price, and Stock.",
+                parent=self.frame.winfo_toplevel()
+            )
+            return
+
+        conn = get_connection()
+        cursor = conn.cursor()
 
         cursor.execute("""
         INSERT INTO products(
@@ -697,29 +720,28 @@ class InventoryUI:
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            self.category_combo.get().strip() or "General",
-            self.name_entry.get().strip(),
-            float(self.mrp_entry.get().strip() or 0),
-            float(self.purchase_entry.get().strip() or 0),
-            float(self.selling_entry.get().strip() or 0),
-            self.unit_entry.get().strip() or "Pcs",
-            int(self.stock_entry.get().strip() or 0),
+            category,
+            name,
+            mrp_val,
+            purchase_val,
+            selling_val,
+            unit,
+            stock_val,
             self.discount_base_combo.get() or "Price"
         ))
 
         conn.commit()
-
         conn.close()
 
         messagebox.showinfo(
             "Success",
-            "Product added successfully",
+            f"Product '{name}' added successfully",
             parent=self.frame.winfo_toplevel()
         )
 
         self.load_products()
-
         self.clear_form()
+
 
     # =========================
     # SELECT PRODUCT
@@ -795,6 +817,25 @@ class InventoryUI:
         if not request_admin_pin(self.frame, "modify product pricing and details"):
             return
 
+        category = self.category_combo.get().strip() or "General"
+        name = self.name_entry.get().strip()
+
+        if not name:
+            messagebox.showerror("Missing Information", "Please enter Product Name.", parent=self.frame.winfo_toplevel())
+            self.name_entry.focus()
+            return
+
+        # Check duplicate against other products
+        existing = is_product_duplicate(name, category, exclude_id=self.selected_product_id)
+        if existing:
+            messagebox.showerror(
+                "Duplicate Product",
+                f"Cannot update: Another product '{name}' already exists in Category '{category}' (ID: {existing[0]}).\n\n"
+                f"Duplicate names within the same category are not permitted.",
+                parent=self.frame.winfo_toplevel()
+            )
+            return
+
         try:
             mrp_val = float(self.mrp_entry.get().strip() or 0)
             selling_val = float(self.selling_entry.get().strip() or 0)
@@ -810,6 +851,7 @@ class InventoryUI:
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter valid numeric values for MRP, Purchase Price, Selling Price, and Stock.", parent=self.frame.winfo_toplevel())
             return
+
 
         conn = get_connection()
 
@@ -1142,84 +1184,102 @@ class InventoryUI:
             filetypes=[("CSV Files", "*.csv")]
         )
 
-
         if not file_path:
             return
 
         try:
-
             with open(file_path, newline='', encoding='utf-8') as csvfile:
-
                 reader = csv.DictReader(csvfile)
-
                 conn = get_connection()
-
                 cursor = conn.cursor()
 
+                added_count = 0
+                updated_count = 0
+                skipped_count = 0
+
                 for row in reader:
+                    category = (row.get("Category") or row.get("category") or "General").strip() or "General"
+                    product_name = (row.get("Product Name") or row.get("name") or row.get("Product") or "").strip()
 
-                    category = row["Category"].strip()
+                    if not product_name:
+                        skipped_count += 1
+                        continue
 
-                    product_name = row["Product Name"].strip()
+                    try:
+                        mrp = float(row.get("MRP") or row.get("mrp") or 0)
+                    except (ValueError, TypeError):
+                        mrp = 0.0
 
-                    mrp = float(row["MRP"])
+                    try:
+                        purchase_price = float(row.get("Purchase Price") or row.get("purchase_price") or 0)
+                    except (ValueError, TypeError):
+                        purchase_price = 0.0
 
-                    purchase_price = row["Purchase Price"]
+                    try:
+                        selling_price = float(row.get("Selling Price") or row.get("selling_price") or 0)
+                    except (ValueError, TypeError):
+                        selling_price = 0.0
 
-                    selling_price = float(row["Selling Price"])
+                    try:
+                        stock = int(row.get("Stock") or row.get("stock") or 0)
+                    except (ValueError, TypeError):
+                        stock = 0
 
-                    stock = int(row["Stock"])
-                    
-                    unit = row["Unit"]
-                    
-                    discount_base = row.get("Discount On", "Price") or "Price"
+                    unit = (row.get("Unit") or row.get("unit") or "Pcs").strip() or "Pcs"
+                    discount_base = (row.get("Discount On") or row.get("discount_base") or "Price").strip() or "Price"
 
+                    # Check if already exists in DB (case-insensitive)
+                    cursor.execute("""
+                        SELECT id FROM products
+                        WHERE LOWER(TRIM(COALESCE(category, 'General'))) = LOWER(TRIM(?))
+                          AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+                        LIMIT 1
+                    """, (category, product_name))
+                    existing_prod = cursor.fetchone()
 
-                    # INSERT PRODUCT
-
-                    cursor.execute(
-                        """
-                        INSERT INTO products(
-                            category,
-                            name,
-                            mrp,
-                            purchase_price,
-                            selling_price,
-                            unit,
-                            stock,
-                            discount_base
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            category,
-                            product_name,
-                            mrp,
-                            purchase_price,
-                            selling_price,
-                            unit,
-                            stock,
-                            discount_base
-                        )
-                    )
+                    if existing_prod:
+                        # Update existing product without creating duplicate row
+                        cursor.execute("""
+                            UPDATE products
+                            SET mrp = ?, purchase_price = ?, selling_price = ?, unit = ?, stock = ?, discount_base = ?
+                            WHERE id = ?
+                        """, (mrp, purchase_price, selling_price, unit, stock, discount_base, existing_prod[0]))
+                        updated_count += 1
+                    else:
+                        # Insert new unique product
+                        cursor.execute("""
+                            INSERT INTO products(category, name, mrp, purchase_price, selling_price, unit, stock, discount_base)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (category, product_name, mrp, purchase_price, selling_price, unit, stock, discount_base))
+                        added_count += 1
 
                 conn.commit()
-
                 conn.close()
 
             self.load_products()
 
+            record_audit_log(
+                "CSV_IMPORT",
+                f"Admin imported CSV: {added_count} new products added, {updated_count} existing updated, {skipped_count} skipped. 0 duplicates."
+            )
+
             messagebox.showinfo(
-                "Success",
-                "Products imported successfully"
+                "Import Complete",
+                f"✅ CSV Import Completed Successfully!\n\n"
+                f"• New products added: {added_count}\n"
+                f"• Existing products updated: {updated_count}\n"
+                f"• Empty/invalid rows skipped: {skipped_count}\n\n"
+                f"All inventory entries remain strictly unique with zero duplicates.",
+                parent=self.frame.winfo_toplevel()
             )
 
         except Exception as e:
-
             messagebox.showerror(
                 "Import Error",
-                str(e)
+                f"Failed to import products from CSV:\n{e}",
+                parent=self.frame.winfo_toplevel()
             )
+
 
     # =====================================
     # STOCK ADJUSTMENT (RETURNS & DAMAGES)
