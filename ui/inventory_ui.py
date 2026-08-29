@@ -653,7 +653,8 @@ class InventoryUI:
         if not self.name_entry.get().strip():
             messagebox.showerror(
                 "Missing Information",
-                "Please enter Product Name."
+                "Please enter Product Name.",
+                parent=self.frame.winfo_toplevel()
             )
             self.name_entry.focus()
             return
@@ -662,7 +663,8 @@ class InventoryUI:
         if not self.unit_entry.get().strip():
             messagebox.showerror(
                 "Missing Information",
-                "Please enter Unit."
+                "Please enter Unit.",
+                parent=self.frame.winfo_toplevel()
             )
             self.unit_entry.focus()
             return
@@ -696,7 +698,8 @@ class InventoryUI:
 
         messagebox.showinfo(
             "Success",
-            "Product added successfully"
+            "Product added successfully",
+            parent=self.frame.winfo_toplevel()
         )
 
         self.load_products()
@@ -756,11 +759,19 @@ class InventoryUI:
 
     def update_product(self):
 
+        # Fallback to current tree selection if selected_product_id wasn't set
+        if self.selected_product_id is None:
+            selected = self.tree.selection()
+            if selected:
+                values = self.tree.item(selected[0])["values"]
+                self.selected_product_id = int(values[0])
+
         if self.selected_product_id is None:
 
             messagebox.showerror(
                 "Error",
-                "Select product first"
+                "Please select a product from the table first.",
+                parent=self.frame.winfo_toplevel()
             )
 
             return
@@ -782,7 +793,7 @@ class InventoryUI:
             else:
                 purchase_val = float(purchase_str or 0)
         except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter valid numeric values for MRP, Purchase Price, Selling Price, and Stock.")
+            messagebox.showerror("Invalid Input", "Please enter valid numeric values for MRP, Purchase Price, Selling Price, and Stock.", parent=self.frame.winfo_toplevel())
             return
 
         conn = get_connection()
@@ -824,8 +835,10 @@ class InventoryUI:
 
         messagebox.showinfo(
             "Success",
-            "Product updated successfully"
+            "Product updated successfully",
+            parent=self.frame.winfo_toplevel()
         )
+
 
         self.load_products()
 
@@ -842,29 +855,38 @@ class InventoryUI:
 
     def delete_product(self):
 
+        # Fallback to current tree selection if selected_product_id wasn't captured
+        if self.selected_product_id is None:
+            selected = self.tree.selection()
+            if selected:
+                values = self.tree.item(selected[0])["values"]
+                self.selected_product_id = int(values[0])
+
         if self.selected_product_id is None:
 
             messagebox.showerror(
                 "Error",
-                "Select product first"
+                "Please select a product from the table first.",
+                parent=self.frame.winfo_toplevel()
             )
 
             return
 
+        p_name = self.name_entry.get().strip() or f"Product #{self.selected_product_id}"
+        p_id = self.selected_product_id
+
         # Security: Require Admin PIN to delete product
-        if not request_admin_pin(self.frame, "delete this product from inventory"):
+        if not request_admin_pin(self.frame, f"delete '{p_name}' from inventory"):
             return
 
         confirm = messagebox.askyesno(
             "Confirm Delete",
-            "Delete this product?"
+            f"Are you sure you want to delete:\n\n'{p_name}' (ID: {p_id})?",
+            parent=self.frame.winfo_toplevel()
         )
 
         if not confirm:
             return
-
-        p_name = self.name_entry.get().strip()
-        p_id = self.selected_product_id
 
         conn = get_connection()
 
@@ -888,7 +910,8 @@ class InventoryUI:
 
         messagebox.showinfo(
             "Success",
-            "Product deleted successfully"
+            f"Product '{p_name}' deleted successfully",
+            parent=self.frame.winfo_toplevel()
         )
 
         self.load_products()
@@ -897,6 +920,7 @@ class InventoryUI:
             self.search_products(None)
 
         self.clear_form()
+
 
 
     # =========================

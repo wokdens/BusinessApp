@@ -90,7 +90,8 @@ def request_admin_pin(parent, action_name="perform this action", allow_session_u
     dialog.title("Admin Authorization Required")
     dialog.geometry("460x280")
     dialog.resizable(False, False)
-    dialog.transient(parent.winfo_toplevel())
+    top_win = parent.winfo_toplevel() if hasattr(parent, "winfo_toplevel") else parent
+    dialog.transient(top_win)
     dialog.grab_set()
 
     # Center on screen
@@ -101,6 +102,9 @@ def request_admin_pin(parent, action_name="perform this action", allow_session_u
     x = (sw - w) // 2
     y = (sh - h) // 2
     dialog.geometry(f"{w}x{h}+{x}+{y}")
+    dialog.lift()
+    dialog.focus_force()
+
 
     result = [False]
 
