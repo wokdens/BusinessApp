@@ -55,34 +55,6 @@ def column_exists(
     return False
 
 
-# =========================
-# AUTO MIGRATIONS
-# =========================
-
-def column_exists(
-    table_name,
-    column_name
-):
-
-    conn = get_connection()
-
-    cursor = conn.cursor()
-
-    cursor.execute(f"""
-    PRAGMA table_info({table_name})
-    """)
-
-    columns = cursor.fetchall()
-
-    conn.close()
-
-    for column in columns:
-
-        if column[1] == column_name:
-            return True
-
-    return False
-
 
 def run_migrations():
 
@@ -384,6 +356,8 @@ def add_product(
     purchase_price,
     selling_price,
     stock,
+    unit="Pcs",
+    category="General",
     discount_base="Price"
 ):
 
@@ -393,22 +367,25 @@ def add_product(
 
     cursor.execute("""
     INSERT INTO products(
+        category,
         name,
         mrp,
         purchase_price,
         selling_price,
         unit,
         stock,
-        COALESCE(discount_base, 'Price')
+        discount_base
     )
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
+        category if category else "General",
         name,
         mrp,
         purchase_price,
         selling_price,
+        unit if unit else "Pcs",
         stock,
-        discount_base
+        discount_base if discount_base else "Price"
     ))
 
     conn.commit()
@@ -929,16 +906,14 @@ def get_product_complete_details(product_name):
 
 def get_customer_names():
 
-    conn = sqlite3.connect(
-        "database/business.db"
-    )
+    conn = get_connection()
 
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT DISTINCT customer_name
-        FROM invoices
-        ORDER BY customer_name
+        SELECT name
+        FROM customers
+        ORDER BY name
     """)
 
     rows = cursor.fetchall()
@@ -946,6 +921,7 @@ def get_customer_names():
     conn.close()
 
     return [row[0] for row in rows]
+
 
 # =====================================
 # GENERATE DAILY INVOICE NUMBER
@@ -1138,3 +1114,55 @@ def update_invoice_note(invoice_id, note):
 
     conn.commit()
     conn.close()
+
+
+# =====================================
+# SAFE DATABASE BACKUP & RESTORE
+# =====================================
+
+def backup_database_to_file(backup_file_path):
+    """
+    Safely backup the active SQLite database to a target file using SQLite's native backup API.
+    This guarantees that all committed transactions in WAL mode are cleanly backed up.
+    """
+    backup_dir = os.path.dirname(backup_file_path)
+    if backup_dir:
+        os.makedirs(backup_dir, exist_ok=True)
+
+    source_conn = get_connection()
+    try:
+        try:
+            source_conn.execute("PRAGMA wal_checkpoint(FULL)")
+        except Exception:
+            pass
+
+        dest_conn = sqlite3.connect(backup_file_path)
+        try:
+            source_conn.backup(dest_conn)
+        finally:
+            dest_conn.close()
+    finally:
+        source_conn.close()
+
+
+def restore_database_from_file(backup_file_path):
+    """
+    Safely restore the active SQLite database from a backup file using SQLite's native backup API.
+    """
+    if not os.path.exists(backup_file_path):
+        raise FileNotFoundError(f"Backup file not found: {backup_file_path}")
+
+    source_conn = sqlite3.connect(backup_file_path)
+    dest_conn = get_connection()
+    try:
+        try:
+            dest_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
+
+        source_conn.backup(dest_conn)
+        dest_conn.commit()
+    finally:
+        source_conn.close()
+        dest_conn.close()
+

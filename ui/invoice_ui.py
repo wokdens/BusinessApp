@@ -22,6 +22,8 @@ from datetime import datetime
 import os
 import textwrap 
 
+from config import INVOICES_DIR
+
 class InvoiceUI:
     _saved_state = None
     
@@ -1212,22 +1214,18 @@ class InvoiceUI:
         paid_amount
     ):
 
-        os.makedirs(
-            "invoices",
-            exist_ok=True
-        )
-
         # sanitize customer name for filename
         safe_name = "".join(
             c for c in customer_name if c.isalnum() or c in (" ", "-", "_")
         ).strip().replace(" ", "_")
 
         if safe_name:
-            path = f"invoices/INV-{invoice_number}_{safe_name}.pdf"
+            path = os.path.join(INVOICES_DIR, f"INV-{invoice_number}_{safe_name}.pdf")
         else:
-            path = f"invoices/INV-{invoice_number}.pdf"
+            path = os.path.join(INVOICES_DIR, f"INV-{invoice_number}.pdf")
 
         pdf = canvas.Canvas(path)
+
 
         # =====================================
         # TITLE

@@ -10,10 +10,13 @@ from database import (
     get_total_customers,
     get_total_pending_amount,
     get_today_sales,
-    get_low_stock_items
+    get_low_stock_items,
+    backup_database_to_file,
+    restore_database_from_file
 )
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, BACKUPS_DIR
+
 
 
 class DashboardUI:
@@ -216,36 +219,29 @@ class DashboardUI:
 
         try:
 
-            os.makedirs(
-                "backups",
-                exist_ok=True
-            )
-
             from datetime import datetime
 
             timestamp = datetime.now().strftime(
                 "%Y%m%d_%H%M%S"
             )
 
-            backup_file = (
-                f"backups/business_backup_{timestamp}.db"
+            backup_file = os.path.join(
+                BACKUPS_DIR,
+                f"business_backup_{timestamp}.db"
             )
 
-            shutil.copy(
-                DATABASE_PATH,
-                backup_file
-            )
+            backup_database_to_file(backup_file)
 
             messagebox.showinfo(
                 "Success",
-                f"Backup created:\n{backup_file}"
+                f"Backup created successfully:\n{backup_file}"
             )
 
         except Exception as e:
 
             messagebox.showerror(
                 "Error",
-                str(e)
+                f"Backup failed: {str(e)}"
             )
 
     # =========================
@@ -258,6 +254,7 @@ class DashboardUI:
 
             backup_file = filedialog.askopenfilename(
                 title="Select Backup File",
+                initialdir=BACKUPS_DIR,
                 filetypes=[
                     ("Database Files", "*.db")
                 ]
@@ -268,25 +265,22 @@ class DashboardUI:
 
             confirm = messagebox.askyesno(
                 "Confirm Restore",
-                "Current database will be replaced.\nContinue?"
+                "Current database will be replaced with the selected backup.\nContinue?"
             )
 
             if not confirm:
                 return
 
-            shutil.copy(
-                backup_file,
-                DATABASE_PATH
-            )
+            restore_database_from_file(backup_file)
 
             messagebox.showinfo(
                 "Success",
-                "Database restored successfully.\nRestart application."
+                "Database restored successfully.\nPlease restart the application to reload all views."
             )
 
         except Exception as e:
 
             messagebox.showerror(
                 "Error",
-                str(e)
+                f"Restore failed: {str(e)}"
             )

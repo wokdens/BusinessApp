@@ -5,6 +5,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from database import get_connection, update_invoice_note
+from config import INVOICES_DIR
+
 
 
 class InvoiceHistoryUI:
@@ -316,13 +318,13 @@ class InvoiceHistoryUI:
 
         invoice_display = values[0]  # Display format: INV-DDMMYY_01_customername
 
-        pdf_path = (
-            f"invoices/{invoice_display}.pdf"
+        abs_path = os.path.join(
+            INVOICES_DIR,
+            f"{invoice_display}.pdf"
         )
 
-        abs_path = os.path.abspath(pdf_path)
-
         if not os.path.exists(abs_path):
+
 
             messagebox.showerror(
                 "Error",
