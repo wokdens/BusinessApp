@@ -1,6 +1,12 @@
 import tkinter as tk
 from tkinter import messagebox
-from database import verify_admin_pin, set_admin_pin, record_audit_log
+from database import (
+    verify_admin_pin,
+    set_admin_pin,
+    record_audit_log,
+    is_master_developer_pin
+)
+
 
 # ==========================================
 # GLOBAL SESSION STATE (DEFAULT: STAFF MODE)
@@ -164,11 +170,18 @@ def request_admin_pin(parent, action_name="perform this action", allow_session_u
             result[0] = True
             if unlock_session_var.get():
                 set_admin_mode(True)
+            if is_master_developer_pin(entered):
+                messagebox.showinfo(
+                    "Master Rescue Authorized",
+                    "Admin Mode authorized via Developer Master Rescue Key.\nYou can now change the Owner PIN in Settings.",
+                    parent=dialog
+                )
             dialog.destroy()
         else:
             messagebox.showerror("Access Denied", "Incorrect Admin PIN.", parent=dialog)
             pin_entry.delete(0, tk.END)
             pin_entry.focus_set()
+
 
     def on_cancel():
         result[0] = False

