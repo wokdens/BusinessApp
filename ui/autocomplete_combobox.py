@@ -323,38 +323,48 @@ class AutocompleteCombobox(tk.Frame):
 
 
     def _on_enter_pressed(self, event):
-        """Enter key on entry: select first match if popup is visible."""
+        """Enter key on entry: select first match if popup is visible, and trigger selection callbacks."""
         if self.popup and self.popup.winfo_exists() and self.popup.winfo_viewable() and self.listbox:
             sel = self.listbox.curselection()
-            if sel:
+            if sel and sel[0] < self.listbox.size():
                 val = self.listbox.get(sel[0])
                 self.set(val)
+                self.hide_popup()
                 self._notify_change()
-                return "break"
             elif self.current_matches:
                 self.set(self.current_matches[0])
+                self.hide_popup()
                 self._notify_change()
-                return "break"
-        self.hide_popup()
+            else:
+                self.hide_popup()
+        else:
+            self.hide_popup()
+            self._notify_change()
 
     def _on_listbox_enter(self, event):
-        """Enter key on listbox: select and return to entry."""
+        """Enter key on listbox: select and trigger change notification."""
         sel = self.listbox.curselection()
-        if sel:
+        if sel and sel[0] < self.listbox.size():
             val = self.listbox.get(sel[0])
             self.set(val)
             self._notify_change()
         self.hide_popup(focus_entry=True)
+        # Forward Enter event to entry so parent navigation handlers fire
+        try:
+            self.entry.event_generate("<Return>")
+        except Exception:
+            pass
         return "break"
 
     def _on_listbox_select(self, event):
         """Mouse click on listbox item."""
         sel = self.listbox.curselection()
-        if sel:
+        if sel and sel[0] < self.listbox.size():
             val = self.listbox.get(sel[0])
             self.set(val)
             self._notify_change()
         self.hide_popup(focus_entry=True)
+
 
     def _on_mouse_motion(self, event):
         """Hover highlight item in listbox."""

@@ -192,9 +192,10 @@ class InvoiceUI:
         products = get_product_names()
         self.product_combo.set_completion_list(products)
 
-        self.product_combo.bind("<KeyRelease>", self.autofill_product_details)
-        self.product_combo.bind("<<ComboboxSelected>>", self.autofill_product_details)
-        self.product_combo.bind("<FocusOut>", self.autofill_product_details)
+        self.product_combo.bind("<KeyRelease>", lambda e: self.autofill_product_details(focus_qty=False))
+        self.product_combo.bind("<<ComboboxSelected>>", lambda e: self.autofill_product_details(focus_qty=True))
+        self.product_combo.bind("<FocusOut>", lambda e: self.autofill_product_details(focus_qty=False))
+        self.product_combo.entry.bind("<Return>", self.on_product_enter_pressed)
 
         # Row 1: Qty, MRP, Price, Unit
         tk.Label(product_frame, text="Qty:", font=("Arial", 10, "bold")).grid(row=1, column=0, padx=4, pady=3, sticky="w")
@@ -254,7 +255,8 @@ class InvoiceUI:
         # =========================
         # TALLY SEAMLESS KEYBOARD NAVIGATION LOOP
         # =========================
-        self.customer_combo.entry.bind("<Return>", lambda e: self.product_combo.entry.focus_set())
+        self.customer_combo.entry.bind("<Return>", self.on_customer_enter_pressed)
+        self.customer_combo.bind("<<ComboboxSelected>>", self.on_customer_enter_pressed)
 
         # Auto-Select-All on FocusIn for rapid overwrite
         for entry_w in (self.qty_entry, self.price_entry, self.discount_entry):
@@ -273,6 +275,7 @@ class InvoiceUI:
             "<Return>",
             lambda e: self.add_to_cart()
         )
+
 
 
         # =========================
@@ -546,16 +549,26 @@ class InvoiceUI:
     # AUTOFILL
     # =========================
 
+    def on_customer_enter_pressed(self, event=None):
+        """Move focus seamlessly from customer search to product search."""
+        self.product_combo.entry.focus_set()
+        self.product_combo.entry.selection_range(0, tk.END)
+
+    def on_product_enter_pressed(self, event=None):
+        """Product Enter key: autofill details and advance focus into Qty."""
+        self.autofill_product_details(focus_qty=True)
+
     def autofill_product_details(
         self,
-        event=None
+        event=None,
+        focus_qty=False
     ):
 
         selected = (
             self.product_combo.get()
         )
 
-        if not selected:
+        if not selected or not selected.strip():
             return
 
         product = get_product_complete_details(selected)
@@ -645,9 +658,10 @@ class InvoiceUI:
             self.qty_entry.delete(0, tk.END)
             self.qty_entry.insert(0, "1")
 
-        # Focus into Qty and select text for instant overwrite (Tally flow)
-        self.qty_entry.focus_set()
-        self.qty_entry.selection_range(0, tk.END)
+        # Only focus into Qty if triggered by Enter or dropdown selection
+        if focus_qty:
+            self.qty_entry.focus_set()
+            self.qty_entry.selection_range(0, tk.END)
 
 
     # =========================
@@ -656,31 +670,21 @@ class InvoiceUI:
 
     def add_to_cart(self):
 
-        selected_customer = (
-            self.customer_combo.get()
-        )
-
-        if selected_customer not in self.customer_list:
-
-            messagebox.showerror(
-                "Error",
-                "Please select existing customer"
-            )
-
-            return
-
         selected_product = (
             self.product_combo.get()
         )
 
-        if not selected_product:
+        if not selected_product or not selected_product.strip():
 
             messagebox.showerror(
                 "Error",
-                "Please select product"
+                "Please select a product first.",
+                parent=self.frame.winfo_toplevel()
             )
 
+            self.product_combo.entry.focus_set()
             return
+
 
         product = get_product_complete_details(selected_product)
         if not product:
@@ -1048,6 +1052,9 @@ class InvoiceUI:
 
         grand_total = round(grand_total_raw)
 
+        raw_customer = self.customer_combo.get().strip()
+        customer_name = raw_customer.split(" (")[0].strip() if raw_customer else "Cash / Walk-in Customer"
+
         invoice_id = save_complete_invoice(
             customer_name,
             self.cart_items,
@@ -1063,11 +1070,23 @@ class InvoiceUI:
             paid_amount
         )
 
+        # Clear cart and reset form for the next customer
+        self.cart_items = []
+        self.refresh_cart_table()
+        self.clear_inputs()
+        self.customer_combo.set("")
+        self.paid_entry.delete(0, tk.END)
+        if hasattr(self.note_text, "delete"):
+            self.note_text.delete(0, tk.END)
+        self.update_total()
+        self.customer_combo.entry.focus_set()
+
         messagebox.showinfo(
             "Success",
             f"Invoice #{invoice_id} saved successfully!\nPDF generated.",
             parent=self.frame.winfo_toplevel()
         )
+
 
 
     # =========================
