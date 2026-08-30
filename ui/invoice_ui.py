@@ -350,11 +350,13 @@ class InvoiceUI:
             "<Button-1>",
             self.handle_table_click
         )
-        # Table Keyboard Shortcuts (Tally Style)
+        # Table Keyboard & Mouse Shortcuts (Tally Style)
+        self.tree.bind("<Double-1>", lambda e: self._edit_selected_cart_row())
         self.tree.bind("<Delete>", lambda e: self._delete_selected_cart_row())
         self.tree.bind("<BackSpace>", lambda e: self._delete_selected_cart_row())
         self.tree.bind("<Return>", lambda e: self._edit_selected_cart_row())
         self.tree.bind("<F4>", lambda e: self._edit_selected_cart_row())
+
 
 
         # =========================
