@@ -43,7 +43,43 @@ def main():
         sign_script = os.path.join(SCRIPTS_DIR, 'sign_app.ps1')
         run_command(f'powershell -ExecutionPolicy Bypass -File "{sign_script}" -FilePath "{EXE_PATH}"', 'Signing BusinessApp.exe with Wokdens Certificate')
 
-    # 4. Check for Inno Setup compiler
+    # 4. Copy certificate and 1-click register script into dist for standalone client deployment
+    cer_src = os.path.join(CERT_DIR, 'wokdens_codesign.cer')
+    if os.path.exists(cer_src) and os.path.exists(DIST_DIR):
+        shutil.copy2(cer_src, os.path.join(DIST_DIR, 'wokdens_codesign.cer'))
+        reg_bat_path = os.path.join(DIST_DIR, 'Register_Security_Certificate.bat')
+        with open(reg_bat_path, 'w', encoding='utf-8') as f:
+            f.write('''@echo off
+:: Register Wokdens Security Certificate to eliminate Windows SmartScreen warnings
+echo =======================================================
+echo   Registering Wokdens Security Certificate
+echo =======================================================
+echo.
+set CER_FILE=%~dp0wokdens_codesign.cer
+
+if not exist "%CER_FILE%" (
+    echo [ERROR] Certificate file not found at: %CER_FILE%
+    pause
+    exit /b 1
+)
+
+echo Adding certificate to Trusted Root Certification Authorities...
+certutil -addstore -f "Root" "%CER_FILE%"
+
+echo Adding certificate to Trusted Publishers...
+certutil -addstore -f "TrustedPublisher" "%CER_FILE%"
+
+echo.
+echo =======================================================
+echo   [SUCCESS] Certificate installed successfully!
+echo   Windows SmartScreen will now recognize Wokdens as a verified publisher.
+echo =======================================================
+echo.
+pause
+''')
+        print(f'[SUCCESS] Standalone certificate installer bundled in: {DIST_DIR}\\Register_Security_Certificate.bat')
+
+    # 5. Check for Inno Setup compiler
     iscc_paths = [
         'iscc.exe',
         r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
@@ -68,7 +104,8 @@ def main():
                 print(f'\n[SUCCESS] Installer ready at:\n{installer_exe}')
     else:
         print('\n[INFO] Inno Setup compiler (ISCC.exe) not detected on this system.')
-        print(f'[SUCCESS] Standalone Application compiled and signed at:\n{DIST_DIR}\BusinessApp.exe')
+        print(f'[SUCCESS] Standalone Application compiled and signed at:\n{DIST_DIR}\\BusinessApp.exe')
 
 if __name__ == '__main__':
     main()
+
