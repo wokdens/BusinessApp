@@ -237,34 +237,41 @@ class InvoiceHistoryUI:
 
 
     # =========================
-    # SEARCH
+    # SEARCH (SMART MULTI-TERM TOKEN SEARCH)
     # =========================
 
-    def search_invoices(self, event):
+    def search_invoices(self, event=None):
 
         keyword = (
             self.search_entry.get()
+            .strip()
             .lower()
         )
+
+        search_terms = keyword.split()
+        if not search_terms:
+            self.render_table(self.all_invoices)
+            return
 
         filtered = []
 
         for row in self.all_invoices:
+            # Format: row = (id, invoice_number, date, customer_name, total, paid, pending, note)
+            invoice_no = str(row[1] or row[0]).lower()
+            date_str = str(row[2] or "").lower()
+            customer = str(row[3] or "").lower()
+            total = str(row[4] or "")
+            paid = str(row[5] or "")
+            pending = str(row[6] or "")
+            note = str(row[7] or "").lower()
 
-            invoice_no = row[1]  # invoice_number
+            searchable_text = f"inv-{invoice_no} {date_str} {customer} {total} {paid} {pending} {note}".lower()
 
-            customer = str(row[3]).lower()  # customer name is now at index 3
-            note = str(row[7]).lower()
-
-            if (
-                keyword in invoice_no.lower()
-                or keyword in customer
-                or keyword in note
-            ):
-
+            if all(term in searchable_text for term in search_terms):
                 filtered.append(row)
 
         self.render_table(filtered)
+
 
     # =========================
     # OPEN PDF

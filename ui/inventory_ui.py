@@ -663,13 +663,14 @@ class InventoryUI:
             )
 
     # =========================
-    # SEARCH PRODUCTS
+    # SEARCH PRODUCTS (SMART MULTI-TERM TOKEN SEARCH)
     # =========================
 
-    def search_products(self, event):
+    def search_products(self, event=None):
 
         keyword = (
             self.search_entry.get()
+            .strip()
             .lower()
         )
 
@@ -678,18 +679,22 @@ class InventoryUI:
         )
 
         admin_active = is_admin_mode()
+        search_terms = keyword.split()
 
         match_count = 0
         for product in self.all_products:
+            prod_id = str(product[0])
+            category = str(product[1] or "").lower()
+            name = str(product[2] or "").lower()
+            mrp = str(product[3] or "")
+            purchase = str(product[4] or "") if admin_active else ""
+            selling = str(product[5] or "")
+            unit = str(product[6] or "").lower()
+            stock = str(product[7] or "")
 
-            category = str(product[1]).lower()
+            searchable_text = f"{prod_id} {category} {name} {mrp} {purchase} {selling} {unit} {stock}".lower()
 
-            name = str(product[2]).lower()
-
-            if (
-                keyword in category
-                or keyword in name
-            ):
+            if not search_terms or all(term in searchable_text for term in search_terms):
                 display_val = list(product)
                 if not admin_active:
                     display_val[4] = "***"
@@ -703,6 +708,7 @@ class InventoryUI:
                     tags=(tag,)
                 )
                 match_count += 1
+
 
     # =========================
     # SAVE PRODUCT
