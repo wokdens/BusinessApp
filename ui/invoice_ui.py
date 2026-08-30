@@ -1334,9 +1334,7 @@ class InvoiceUI:
         # MANDATORY FOOTER & BRANDING (IMMEDIATELY AFTER GRAND TOTAL)
         # =====================================
         footer_line_y = total_box_y - 12
-
         footer_text_y = footer_line_y - 12
-        cut_guide_y = footer_text_y - 10
 
         # Bottom Divider Line directly below Total box
         pdf.setStrokeColorRGB(0.85, 0.88, 0.92)
@@ -1353,17 +1351,8 @@ class InvoiceUI:
         pdf.setFillColorRGB(0.35, 0.35, 0.35)
         pdf.drawRightString(555, footer_text_y, "⚡ Powered by wokdens.com")
 
-        # Subtle Scissor / Dashed Cut Guide Line for Paper Reuse
-        pdf.setStrokeColorRGB(0.78, 0.82, 0.88)
-        pdf.setLineWidth(0.5)
-        pdf.setDash(3, 3)
-        pdf.line(40, cut_guide_y, 555, cut_guide_y)
-        pdf.setDash()  # reset dash
-        pdf.setFont("Helvetica", 6.5)
-        pdf.setFillColorRGB(0.6, 0.65, 0.72)
-        pdf.drawRightString(555, cut_guide_y - 7, "✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Cut along line to reuse remaining page")
-
         pdf.save()
+
 
 
 
