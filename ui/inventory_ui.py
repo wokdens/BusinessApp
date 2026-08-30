@@ -348,8 +348,32 @@ class InventoryUI:
         )
 
         # =========================
+        # KEYBOARD NAVIGATION LOOP (TALLY SPEED)
+        # =========================
+        self.category_combo.entry.bind("<Return>", lambda e: (self.name_entry.focus_set(), self.name_entry.selection_range(0, tk.END)))
+        self.category_combo.bind("<<ComboboxSelected>>", lambda e: (self.name_entry.focus_set(), self.name_entry.selection_range(0, tk.END)))
+
+        self.name_entry.bind("<Return>", lambda e: (self.mrp_entry.focus_set(), self.mrp_entry.selection_range(0, tk.END)))
+        self.mrp_entry.bind(
+            "<Return>",
+            lambda e: (
+                self.purchase_entry.focus_set()
+                if str(self.purchase_entry.cget("state")) != "disabled"
+                else self.selling_entry.focus_set()
+            )
+        )
+        self.purchase_entry.bind("<Return>", lambda e: (self.selling_entry.focus_set(), self.selling_entry.selection_range(0, tk.END)))
+        self.selling_entry.bind("<Return>", lambda e: self.unit_entry.focus_set())
+        self.unit_entry.bind("<Return>", lambda e: (self.stock_entry.focus_set(), self.stock_entry.selection_range(0, tk.END)))
+        self.stock_entry.bind("<Return>", lambda e: self.save_product())
+
+        for entry_w in (self.name_entry, self.mrp_entry, self.purchase_entry, self.selling_entry, self.stock_entry):
+            entry_w.bind("<FocusIn>", lambda e, w=entry_w: w.selection_range(0, tk.END) if hasattr(w, "selection_range") else None)
+
+        # =========================
         # BUTTONS
         # =========================
+
 
         btn_frame = tk.Frame(form_frame)
 
@@ -526,10 +550,34 @@ class InventoryUI:
             "<<TreeviewSelect>>",
             self.select_product
         )
+        self.tree.bind("<Double-1>", self._on_tree_double_click)
+        self.tree.bind("<Return>", self._on_tree_double_click)
+        self.tree.bind("<Delete>", lambda e: self.delete_product())
+
+        self.search_entry.bind("<Down>", self._focus_first_table_row)
+        self.search_entry.bind("<Return>", self._focus_first_table_row)
 
         self.all_products = []
 
         self.load_products()
+
+    def _focus_first_table_row(self, event=None):
+        """Move focus from search bar to first product row in table."""
+        children = self.tree.get_children()
+        if children:
+            self.tree.selection_set(children[0])
+            self.tree.focus(children[0])
+            self.tree.focus_set()
+            self.select_product(None)
+        return "break"
+
+    def _on_tree_double_click(self, event=None):
+        """Double click or Enter on table row: load into form and focus selling price."""
+        self.select_product(None)
+        self.selling_entry.focus_set()
+        self.selling_entry.selection_range(0, tk.END)
+        return "break"
+
 
     # =========================
     # REFRESH CATEGORIES
