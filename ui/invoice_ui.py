@@ -700,6 +700,12 @@ class InvoiceUI:
 
         try:
             quantity = int(self.qty_entry.get())
+            if quantity <= 0:
+                messagebox.showerror(
+                    "Invalid Quantity",
+                    "Quantity must be a positive whole number greater than 0."
+                )
+                return
         except ValueError:
             messagebox.showerror(
                 "Invalid Quantity",
@@ -709,6 +715,12 @@ class InvoiceUI:
 
         try:
             custom_price = float(self.price_entry.get())
+            if custom_price < 0:
+                messagebox.showerror(
+                    "Invalid Price",
+                    "Price cannot be negative."
+                )
+                return
         except ValueError:
             messagebox.showerror(
                 "Invalid Price",
@@ -726,12 +738,19 @@ class InvoiceUI:
 
         try:
             discount = float(self.discount_entry.get())
+            if discount < 0 or discount > 100:
+                messagebox.showerror(
+                    "Invalid Discount",
+                    "Discount must be between 0% and 100%."
+                )
+                return
         except ValueError:
             messagebox.showerror(
                 "Invalid Discount",
                 "Please enter a valid numeric value in Discount."
             )
             return
+
 
         discount_base = self.discount_base_var.get() or "Price"
 
@@ -902,6 +921,8 @@ class InvoiceUI:
             0,
             tk.END
         )
+        self.qty_entry.insert(0, "1")
+
 
         self.price_entry.delete(
             0,
@@ -1010,6 +1031,15 @@ class InvoiceUI:
 
         self.note_text.delete(0, tk.END)
         self.note_text.insert(0, state.get("note", ""))
+
+    def on_tab_leave(self):
+        """Called when user switches tabs away from Invoice page."""
+        self.save_state()
+
+    def on_tab_enter(self):
+        """Called when user switches tabs back to Invoice page."""
+        self.restore_state()
+
 
         self.update_pending()
 
