@@ -150,16 +150,18 @@ class LedgerUI:
                 anchor="center" if col in ("S.No", "Total Pending", "Invoices Count") else "w"
             )
             if col == "S.No":
-                width = 55
+                width = 45
             elif col == "Customer Name":
-                width = 300
+                width = 320
             else:
                 width = 160
             self.customer_tree.column(
                 col,
                 width=width,
+                minwidth=35 if col == "S.No" else 50,
                 anchor="center" if col in ("S.No", "Total Pending", "Invoices Count") else "w"
             )
+
 
         self.customer_tree.pack(side="left", fill="both", expand=True)
         scroll_y.pack(side="right", fill="y")
@@ -444,7 +446,7 @@ class LedgerUI:
                 anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending", "Status") else "w"
             )
             if col == "S.No":
-                width = 55
+                width = 45
             elif col == "Invoice Number":
                 width = 220
             elif col in ("Date", "Total", "Paid", "Pending"):
@@ -459,8 +461,10 @@ class LedgerUI:
             self.invoice_tree.column(
                 col,
                 width=width,
+                minwidth=35 if col == "S.No" else 50,
                 anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending", "Status") else "w"
             )
+
 
 
         self.invoice_tree.pack(side="left", fill="both", expand=True)

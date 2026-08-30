@@ -119,7 +119,7 @@ class InvoiceHistoryUI:
 
             width = 150
             if col == "S.No":
-                width = 55
+                width = 45
             elif col == "Invoice No":
                 width = 220
             elif col == "Customer":
@@ -132,8 +132,10 @@ class InvoiceHistoryUI:
             self.tree.column(
                 col,
                 width=width,
+                minwidth=35 if col == "S.No" else 50,
                 anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending") else "w"
             )
+
 
 
         self.tree.pack(

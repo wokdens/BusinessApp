@@ -320,8 +320,10 @@ class InvoiceUI:
         for col in columns:
             self.tree.heading(col, text=col)
             width = 100
-            if col == "Product":
-                width = 240
+            if col == "S.No":
+                width = 45
+            elif col == "Product":
+                width = 280
             elif col in ("MRP", "Price"):
                 width = 90
             elif col in ("Qty", "Unit", "Discount"):
@@ -331,7 +333,13 @@ class InvoiceUI:
             elif col in ("Edit", "Delete"):
                 width = 65
 
-            self.tree.column(col, width=width, anchor="center")
+            self.tree.column(
+                col,
+                width=width,
+                minwidth=35 if col == "S.No" else 50,
+                anchor="center" if col != "Product" else "w"
+            )
+
 
         tree_scroll = ttk.Scrollbar(
             table_frame,
