@@ -10,6 +10,7 @@ class AutocompleteCombobox(tk.Frame):
     - Full keyboard navigation (Down/Up arrow navigation, Enter to select, Escape to close)
     - Mouse hover live selection and single-click pick
     - Multi-word search matching (e.g. '2.5 wire' matches 'Polycab 2.5 sq mm Wire')
+    - Bulletproof event dispatcher that prevents external bind calls from wiping internal lifecycle handlers
     """
 
     def __init__(self, parent, width=30, placeholder="", font=("Arial", 11)):
@@ -37,9 +38,14 @@ class AutocompleteCombobox(tk.Frame):
         self.popup = None
         self.scrollbar = None
         self._listbox_font = font
-        self._selection_callbacks = []
 
-        # Key & Mouse Bindings on Entry
+        # Custom callback registries
+        self._keyrelease_callbacks = []
+        self._return_callbacks = []
+        self._selection_callbacks = []
+        self._focusout_callbacks = []
+
+        # Internal Bindings on Entry
         self.entry.bind("<KeyRelease>", self._on_key_release)
         self.entry.bind("<Down>", self._on_down_arrow)
         self.entry.bind("<Up>", self._on_up_arrow)
@@ -51,6 +57,30 @@ class AutocompleteCombobox(tk.Frame):
         self.entry.bind("<Escape>", lambda e: self.hide_popup())
         self.entry.bind("<FocusOut>", self._on_entry_focus_out)
         self.entry.bind("<Button-1>", self._on_entry_clicked)
+
+        # Protect self.entry.bind from clobbering internal handlers
+        _orig_entry_bind = self.entry.bind
+
+        def safe_entry_bind(sequence=None, func=None, add=None):
+            if sequence == "<KeyRelease>":
+                if func and func not in self._keyrelease_callbacks:
+                    self._keyrelease_callbacks.append(func)
+                return
+            elif sequence in ("<Return>", "<KP_Enter>"):
+                if func and func not in self._return_callbacks:
+                    self._return_callbacks.append(func)
+                return
+            elif sequence == "<<ComboboxSelected>>":
+                if func and func not in self._selection_callbacks:
+                    self._selection_callbacks.append(func)
+                return
+            elif sequence == "<FocusOut>":
+                if func and func not in self._focusout_callbacks:
+                    self._focusout_callbacks.append(func)
+                return
+            return _orig_entry_bind(sequence, func, add="+")
+
+        self.entry.bind = safe_entry_bind
 
 
     # =========================
@@ -77,11 +107,25 @@ class AutocompleteCombobox(tk.Frame):
         self.entry.focus_set()
 
     def bind(self, sequence=None, func=None, add=None):
-        """Forward event bindings to self and self.entry so listeners on frame catch entry events."""
-        if sequence == "<<ComboboxSelected>>" and func and func not in self._selection_callbacks:
-            self._selection_callbacks.append(func)
-        super().bind(sequence, func, add)
-        return self.entry.bind(sequence, func, add)
+        """Register callbacks safely without overwriting internal handlers."""
+        if not sequence or not func:
+            return
+        if sequence == "<KeyRelease>":
+            if func not in self._keyrelease_callbacks:
+                self._keyrelease_callbacks.append(func)
+        elif sequence in ("<Return>", "<KP_Enter>"):
+            if func not in self._return_callbacks:
+                self._return_callbacks.append(func)
+        elif sequence == "<<ComboboxSelected>>":
+            if func not in self._selection_callbacks:
+                self._selection_callbacks.append(func)
+        elif sequence == "<FocusOut>":
+            if func not in self._focusout_callbacks:
+                self._focusout_callbacks.append(func)
+        else:
+            super().bind(sequence, func, add="+")
+            self.entry.bind(sequence, func, add="+")
+
 
 
 
@@ -200,20 +244,26 @@ class AutocompleteCombobox(tk.Frame):
         if not typed:
             self.hide_popup()
             self._notify_change()
-            return
-
-        # Smart Multi-Word Search (e.g., '2.5 wire' matches 'Polycab 2.5 sq mm Wire')
-        search_terms = typed.split()
-        matches = []
-        for item in self.completion_list:
-            item_lower = item.lower()
-            if all(term in item_lower for term in search_terms):
-                matches.append(item)
-
-        if matches:
-            self.show_popup(matches)
         else:
-            self.hide_popup()
+            # Smart Multi-Word Search (e.g., '2.5 wire' matches 'Polycab 2.5 sq mm Wire')
+            search_terms = typed.split()
+            matches = []
+            for item in self.completion_list:
+                item_lower = item.lower()
+                if all(term in item_lower for term in search_terms):
+                    matches.append(item)
+
+            if matches:
+                self.show_popup(matches)
+            else:
+                self.hide_popup()
+
+        # Run registered keyrelease callbacks
+        for cb in list(self._keyrelease_callbacks):
+            try:
+                cb(event)
+            except Exception:
+                pass
 
 
     def _on_entry_clicked(self, event):
@@ -341,6 +391,13 @@ class AutocompleteCombobox(tk.Frame):
             self.hide_popup()
             self._notify_change()
 
+        # Run registered return callbacks
+        for cb in list(self._return_callbacks):
+            try:
+                cb(event)
+            except Exception:
+                pass
+
     def _on_listbox_enter(self, event):
         """Enter key on listbox: select and trigger change notification."""
         sel = self.listbox.curselection()
@@ -378,10 +435,16 @@ class AutocompleteCombobox(tk.Frame):
     def _on_entry_focus_out(self, event):
         """Close popup when focus leaves after a short delay (allows mouse clicks to register)."""
         self.after(180, self._check_focus_loss)
+        for cb in list(self._focusout_callbacks):
+            try:
+                cb(event)
+            except Exception:
+                pass
 
     def _on_listbox_focus_out(self, event):
         """Close popup when listbox loses focus."""
         self.after(180, self._check_focus_loss)
+
 
     def _check_focus_loss(self):
         """Verify if neither entry nor listbox has focus before hiding popup."""
