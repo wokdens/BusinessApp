@@ -168,33 +168,7 @@ class DashboardUI:
 
 
 
-        # =========================
-        # CARDS
-        # =========================
 
-        cards_frame = tk.Frame(
-            self.frame,
-            bg="#f5f5f5"
-        )
-
-        cards_frame.pack(pady=10)
-
-
-        self.create_card(
-            cards_frame,
-            "Total Pending",
-            f"₹ {get_total_pending_amount()}",
-            1,
-            0
-        )
-
-        self.create_card(
-            cards_frame,
-            "Today's Sales",
-            f"₹ {get_today_sales()}",
-            1,
-            1
-        )
 
         # =========================
         # LOW STOCK
