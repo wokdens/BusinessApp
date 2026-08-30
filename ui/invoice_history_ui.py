@@ -72,6 +72,7 @@ class InvoiceHistoryUI:
         # =========================
 
         columns = (
+            "S.No",
             "Invoice No",
             "Date",
             "Customer",
@@ -113,11 +114,13 @@ class InvoiceHistoryUI:
             self.tree.heading(
                 col,
                 text=col,
-                anchor="center" if col in ("Date", "Total", "Paid", "Pending") else "w"
+                anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending") else "w"
             )
 
             width = 150
-            if col == "Invoice No":
+            if col == "S.No":
+                width = 55
+            elif col == "Invoice No":
                 width = 220
             elif col == "Customer":
                 width = 200
@@ -129,8 +132,9 @@ class InvoiceHistoryUI:
             self.tree.column(
                 col,
                 width=width,
-                anchor="center" if col in ("Date", "Total", "Paid", "Pending") else "w"
+                anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending") else "w"
             )
+
 
         self.tree.pack(
             side="left",
@@ -217,6 +221,7 @@ class InvoiceHistoryUI:
                 display_invoice = f"INV-{row[0]}"
 
             new_row = (
+                str(idx + 1),
                 display_invoice,
                 row[2],
                 row[3],
@@ -288,7 +293,7 @@ class InvoiceHistoryUI:
         if not item:
             return
 
-        if column == "#7":
+        if column == "#8":
             self.edit_note(item)
         else:
             self.open_invoice_pdf()
@@ -300,7 +305,7 @@ class InvoiceHistoryUI:
 
         current_values = self.tree.item(invoice_id)["values"]
 
-        current_note = current_values[6] if len(current_values) > 6 else ""
+        current_note = current_values[7] if len(current_values) > 7 else ""
 
         dialog = tk.Toplevel(self.frame)
         dialog.title("Edit Note")
@@ -357,7 +362,8 @@ class InvoiceHistoryUI:
             selected
         )["values"]
 
-        invoice_display = values[0]  # Display format: INV-DDMMYY_01_customername
+        invoice_display = values[1]  # Display format: INV-DDMMYY_01_customername
+
 
         abs_path = os.path.join(
             INVOICES_DIR,

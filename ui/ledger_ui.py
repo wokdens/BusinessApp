@@ -113,7 +113,7 @@ class LedgerUI:
         # TABLE
         # =========================
 
-        columns = ("Customer Name", "Total Pending", "Invoices Count")
+        columns = ("S.No", "Customer Name", "Total Pending", "Invoices Count")
 
         table_frame = tk.Frame(
             self.frame,
@@ -147,13 +147,18 @@ class LedgerUI:
             self.customer_tree.heading(
                 col,
                 text=col,
-                anchor="center" if col in ("Total Pending", "Invoices Count") else "w"
+                anchor="center" if col in ("S.No", "Total Pending", "Invoices Count") else "w"
             )
-            width = 300 if col == "Customer Name" else 160
+            if col == "S.No":
+                width = 55
+            elif col == "Customer Name":
+                width = 300
+            else:
+                width = 160
             self.customer_tree.column(
                 col,
                 width=width,
-                anchor="center" if col in ("Total Pending", "Invoices Count") else "w"
+                anchor="center" if col in ("S.No", "Total Pending", "Invoices Count") else "w"
             )
 
         self.customer_tree.pack(side="left", fill="both", expand=True)
@@ -185,7 +190,7 @@ class LedgerUI:
         self.all_customers = get_customers_with_pending()
 
         for idx, row in enumerate(self.all_customers):
-            values = (row[0], f"₹ {row[1]}", row[2])
+            values = (str(idx + 1), row[0], f"₹ {row[1]}", row[2])
             tag = "evenrow" if idx % 2 == 0 else "oddrow"
             self.customer_tree.insert("", "end", values=values, tags=(tag,))
 
@@ -197,7 +202,7 @@ class LedgerUI:
         match_count = 0
         for row in self.all_customers:
             if keyword in row[0].lower():
-                values = (row[0], f"₹ {row[1]}", row[2])
+                values = (str(match_count + 1), row[0], f"₹ {row[1]}", row[2])
                 tag = "evenrow" if match_count % 2 == 0 else "oddrow"
                 self.customer_tree.insert("", "end", values=values, tags=(tag,))
                 match_count += 1
@@ -225,12 +230,13 @@ class LedgerUI:
 
         item_data = self.customer_tree.item(selected[0])
         values = item_data.get("values", [])
-        if not values or len(values) == 0:
+        if not values or len(values) < 2:
             return
 
-        customer_name = str(values[0])
+        customer_name = str(values[1])
         self.selected_customer = customer_name
         self.show_invoice_list(customer_name)
+
 
 
 
@@ -401,7 +407,7 @@ class LedgerUI:
         paid_radio.pack(side="left", padx=5)
 
         # Invoices Table
-        columns = ("Invoice ID", "Invoice Number", "Date", "Total", "Paid", "Pending", "Note")
+        columns = ("S.No", "Invoice Number", "Date", "Total", "Paid", "Pending", "Status", "Note")
 
         table_frame = tk.Frame(
             self.frame,
@@ -435,21 +441,27 @@ class LedgerUI:
             self.invoice_tree.heading(
                 col,
                 text=col,
-                anchor="center" if col in ("Date", "Total", "Paid", "Pending") else "w"
+                anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending", "Status") else "w"
             )
-            width = 160
-            if col == "Invoice Number":
+            if col == "S.No":
+                width = 55
+            elif col == "Invoice Number":
                 width = 220
             elif col in ("Date", "Total", "Paid", "Pending"):
                 width = 110
+            elif col == "Status":
+                width = 90
             elif col == "Note":
                 width = 180
+            else:
+                width = 150
 
             self.invoice_tree.column(
                 col,
                 width=width,
-                anchor="center" if col in ("Date", "Total", "Paid", "Pending") else "w"
+                anchor="center" if col in ("S.No", "Date", "Total", "Paid", "Pending", "Status") else "w"
             )
+
 
         self.invoice_tree.pack(side="left", fill="both", expand=True)
         scroll_y.pack(side="right", fill="y")
@@ -751,6 +763,7 @@ class LedgerUI:
 
             status = "Pending" if pending > 0 else "Paid"
             values = (
+                str(display_count + 1),
                 f"INV-{invoice_number}",
                 date_str,
                 f"₹ {total}",
@@ -787,13 +800,13 @@ class LedgerUI:
                 else:
                     return
             invoice_id = sel[0]
-            column = "#4"
+            column = "#5"
 
         if not invoice_id:
             return
 
         self.selected_invoice = invoice_id
-        if column == "#7":
+        if column == "#8":
             self.edit_invoice_note(invoice_id)
         else:
             self.show_payment_dialog(invoice_id)
@@ -805,7 +818,8 @@ class LedgerUI:
             return
 
         current_values = self.invoice_tree.item(invoice_id)["values"]
-        current_note = current_values[6] if len(current_values) > 6 else ""
+        current_note = current_values[7] if len(current_values) > 7 else ""
+
 
         dialog = tk.Toplevel(self.frame)
         dialog.title("Edit Note")
@@ -943,7 +957,7 @@ class LedgerUI:
         )
         items_table_frame.pack(fill="both", expand=True)
 
-        columns = ("Qty", "Product", "Price", "Unit", "Discount", "Discount On", "Total")
+        columns = ("S.No", "Qty", "Product", "Price", "Unit", "Discount", "Discount On", "Total")
         items_tree = ttk.Treeview(items_table_frame, columns=columns, show="headings", height=6)
         items_scrollbar = ttk.Scrollbar(items_table_frame, orient="vertical", command=items_tree.yview)
         items_tree.configure(yscrollcommand=items_scrollbar.set)
@@ -952,12 +966,13 @@ class LedgerUI:
             items_tree.heading(
                 col,
                 text=col,
-                anchor="center" if col in ("Qty", "Price", "Unit", "Discount", "Discount On", "Total") else "w"
+                anchor="center" if col in ("S.No", "Qty", "Price", "Unit", "Discount", "Discount On", "Total") else "w"
             )
+            width = 45 if col == "S.No" else (160 if col == "Product" else 95)
             items_tree.column(
                 col,
-                width=100,
-                anchor="center" if col in ("Qty", "Price", "Unit", "Discount", "Discount On", "Total") else "w"
+                width=width,
+                anchor="center" if col in ("S.No", "Qty", "Price", "Unit", "Discount", "Discount On", "Total") else "w"
             )
 
         items_tree.pack(side="left", fill="both", expand=True)
@@ -970,9 +985,10 @@ class LedgerUI:
         invoice_items = get_invoice_items(invoice_id)
         for idx, item in enumerate(invoice_items):
             qty, product, price, unit, discount, discount_base, item_total = item
-            values = (qty, product, f"₹{price}", unit, f"{discount}%", discount_base, f"₹{item_total}")
+            values = (str(idx + 1), qty, product, f"₹{price}", unit, f"{discount}%", discount_base, f"₹{item_total}")
             tag = "evenrow" if idx % 2 == 0 else "oddrow"
             items_tree.insert("", "end", values=values, tags=(tag,))
+
 
 
         # =========================
