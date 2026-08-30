@@ -80,6 +80,9 @@ class LedgerUI:
 
         self.search_entry.pack(side="left", padx=10)
         self.search_entry.bind("<KeyRelease>", self.search_customers)
+        self.search_entry.bind("<Down>", self._focus_first_customer_row)
+        self.search_entry.bind("<Return>", self._focus_first_customer_row)
+        self.search_entry.bind("<FocusIn>", lambda e: self.search_entry.selection_range(0, tk.END))
 
         open_ledger_btn = tk.Button(
             search_frame,
@@ -167,6 +170,15 @@ class LedgerUI:
         self.all_customers = []
         self.load_customers()
 
+    def _focus_first_customer_row(self, event=None):
+        """Move focus from search bar to first customer in table."""
+        children = self.customer_tree.get_children()
+        if children:
+            self.customer_tree.selection_set(children[0])
+            self.customer_tree.focus(children[0])
+            self.customer_tree.focus_set()
+        return "break"
+
     def load_customers(self):
         """Load customers with pending amounts"""
         self.customer_tree.delete(*self.customer_tree.get_children())
@@ -192,17 +204,24 @@ class LedgerUI:
 
     def on_customer_select(self, event=None):
         """Handle customer selection on click, double-click, or Enter key"""
-        if event and hasattr(event, "y"):
-            region = self.customer_tree.identify("region", event.x, event.y)
-            if region not in ("cell", "tree"):
-                return
-            row_id = self.customer_tree.identify_row(event.y)
-            if row_id:
-                self.customer_tree.selection_set(row_id)
+        if event and hasattr(event, "y") and hasattr(event, "x") and event.x is not None and event.y is not None:
+            try:
+                region = self.customer_tree.identify("region", event.x, event.y)
+                if region in ("cell", "tree"):
+                    row_id = self.customer_tree.identify_row(event.y)
+                    if row_id:
+                        self.customer_tree.selection_set(row_id)
+            except Exception:
+                pass
 
         selected = self.customer_tree.selection()
         if not selected:
-            return
+            children = self.customer_tree.get_children()
+            if children:
+                self.customer_tree.selection_set(children[0])
+                selected = (children[0],)
+            else:
+                return
 
         item_data = self.customer_tree.item(selected[0])
         values = item_data.get("values", [])
@@ -212,6 +231,7 @@ class LedgerUI:
         customer_name = str(values[0])
         self.selected_customer = customer_name
         self.show_invoice_list(customer_name)
+
 
 
     def export_ledger_csv(self):
@@ -345,6 +365,10 @@ class LedgerUI:
         )
         self.invoice_search_entry.pack(side="left", padx=10)
         self.invoice_search_entry.bind("<KeyRelease>", self.filter_invoices)
+        self.invoice_search_entry.bind("<Down>", self._focus_first_invoice_row)
+        self.invoice_search_entry.bind("<Return>", self._focus_first_invoice_row)
+        self.invoice_search_entry.bind("<Escape>", lambda e: self.show_customer_list())
+        self.invoice_search_entry.bind("<FocusIn>", lambda e: self.invoice_search_entry.selection_range(0, tk.END))
 
         # Status filter buttons
         self.status_filter_var = tk.StringVar(value="All")
@@ -434,6 +458,9 @@ class LedgerUI:
         self.invoice_tree.tag_configure("oddrow", background="#f8f9fa")
 
         self.invoice_tree.bind("<Double-1>", self.on_invoice_double_click)
+        self.invoice_tree.bind("<Return>", self.on_invoice_double_click)
+        self.invoice_tree.bind("<Escape>", lambda e: self.show_customer_list())
+        self.invoice_tree.bind("<BackSpace>", lambda e: self.show_customer_list())
 
         # Store all invoices for filtering
         self.all_invoices = get_customer_invoices(customer_name)
@@ -442,6 +469,16 @@ class LedgerUI:
         
         # Display invoices
         self.refresh_invoice_display()
+
+    def _focus_first_invoice_row(self, event=None):
+        """Move focus from search bar to first invoice in table."""
+        children = self.invoice_tree.get_children()
+        if children:
+            self.invoice_tree.selection_set(children[0])
+            self.invoice_tree.focus(children[0])
+            self.invoice_tree.focus_set()
+        return "break"
+
 
 
     def pay_all_pending_bills(self):
@@ -732,14 +769,25 @@ class LedgerUI:
 
 
 
-    def on_invoice_double_click(self, event):
-        """Open payment dialog or edit note depending on clicked column"""
-        region = self.invoice_tree.identify("region", event.x, event.y)
-        if region != "cell":
-            return
-
-        invoice_id = self.invoice_tree.identify_row(event.y)
-        column = self.invoice_tree.identify_column(event.x)
+    def on_invoice_double_click(self, event=None):
+        """Open payment dialog or edit note depending on clicked column or keyboard selection"""
+        if event and hasattr(event, "x") and hasattr(event, "y") and event.x is not None and event.y is not None:
+            region = self.invoice_tree.identify("region", event.x, event.y)
+            if region not in ("cell", "tree"):
+                return
+            invoice_id = self.invoice_tree.identify_row(event.y)
+            column = self.invoice_tree.identify_column(event.x)
+        else:
+            sel = self.invoice_tree.selection()
+            if not sel:
+                children = self.invoice_tree.get_children()
+                if children:
+                    self.invoice_tree.selection_set(children[0])
+                    sel = (children[0],)
+                else:
+                    return
+            invoice_id = sel[0]
+            column = "#4"
 
         if not invoice_id:
             return
@@ -749,6 +797,7 @@ class LedgerUI:
             self.edit_invoice_note(invoice_id)
         else:
             self.show_payment_dialog(invoice_id)
+
 
     def edit_invoice_note(self, invoice_id):
         # Security: Require Admin PIN to edit note
@@ -1082,6 +1131,9 @@ class LedgerUI:
             except ValueError:
                 messagebox.showerror("Error", "Please enter a valid amount")
 
+        pay_partial_entry.bind("<Return>", lambda e: pay_partially())
+        pay_partial_entry.bind("<FocusIn>", lambda e: pay_partial_entry.selection_range(0, tk.END))
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
 
         clear_bill_btn = tk.Button(
             button_frame,
@@ -1096,7 +1148,7 @@ class LedgerUI:
 
         pay_partial_btn = tk.Button(
             button_frame,
-            text="Pay Partially",
+            text="Pay Partially (Enter)",
             command=pay_partially,
             bg="#66cc66",
             fg="white",
@@ -1107,11 +1159,12 @@ class LedgerUI:
 
         cancel_btn = tk.Button(
             button_frame,
-            text="Cancel",
+            text="Cancel (Esc)",
             command=dialog.destroy,
             bg="#cccccc",
             font=("Arial", 10, "bold"),
             width=18
         )
         cancel_btn.pack(side="left", padx=5)
+
 
