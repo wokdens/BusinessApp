@@ -262,8 +262,9 @@ class LedgerUI:
 
         try:
             customers = get_customers_with_pending()
-            with open(file_path, "w", newline="", encoding="utf-8") as f:
+            with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
+
                 writer.writerow(["Customer Name", "Total Pending Dues (Rs)", "Invoices Count"])
                 for row in customers:
                     writer.writerow([row[0], row[1], row[2]])

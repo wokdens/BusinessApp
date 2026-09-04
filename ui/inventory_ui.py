@@ -1195,8 +1195,9 @@ class InventoryUI:
                 file_path,
                 "w",
                 newline="",
-                encoding="utf-8"
+                encoding="utf-8-sig"
             ) as file:
+
 
                 writer = csv.writer(file)
 
@@ -1235,81 +1236,155 @@ class InventoryUI:
 
         file_path = filedialog.askopenfilename(
             title="Select CSV File",
-            filetypes=[("CSV Files", "*.csv")]
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
         )
 
         if not file_path:
             return
 
         try:
-            with open(file_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                conn = get_connection()
-                cursor = conn.cursor()
+            # 1. Multi-Encoding Auto-Detector (Handles Windows-1252, Excel UTF-8 with BOM, Latin-1, ANSI)
+            raw_text = None
+            encodings_to_try = ["utf-8-sig", "utf-8", "cp1252", "windows-1252", "latin-1", "iso-8859-1", "utf-16"]
+            for enc in encodings_to_try:
+                try:
+                    with open(file_path, "r", encoding=enc) as f:
+                        raw_text = f.read()
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
 
-                added_count = 0
-                updated_count = 0
-                skipped_count = 0
+            if raw_text is None:
+                # Resilient fallback with character replacement
+                with open(file_path, "r", encoding="latin-1", errors="replace") as f:
+                    raw_text = f.read()
 
-                for row in reader:
-                    category = (row.get("Category") or row.get("category") or "General").strip() or "General"
-                    product_name = (row.get("Product Name") or row.get("name") or row.get("Product") or "").strip()
+            import io
+            csvfile = io.StringIO(raw_text)
 
-                    if not product_name:
-                        skipped_count += 1
-                        continue
+            # 2. Dynamic Delimiter Sniffer (Comma, Semicolon, Tab, Pipe)
+            sample = raw_text[:2048]
+            delimiter = ","
+            try:
+                sniffer = csv.Sniffer()
+                dialect = sniffer.sniff(sample, delimiters=",\t;|")
+                delimiter = dialect.delimiter
+            except Exception:
+                delimiter = ","
 
-                    try:
-                        mrp = float(row.get("MRP") or row.get("mrp") or 0)
-                    except (ValueError, TypeError):
-                        mrp = 0.0
+            reader = csv.DictReader(csvfile, delimiter=delimiter)
+            conn = get_connection()
+            cursor = conn.cursor()
 
-                    try:
-                        purchase_price = float(row.get("Purchase Price") or row.get("purchase_price") or 0)
-                    except (ValueError, TypeError):
-                        purchase_price = 0.0
+            added_count = 0
+            updated_count = 0
+            skipped_count = 0
 
-                    try:
-                        selling_price = float(row.get("Selling Price") or row.get("selling_price") or 0)
-                    except (ValueError, TypeError):
-                        selling_price = 0.0
+            for raw_row in reader:
+                if not raw_row:
+                    skipped_count += 1
+                    continue
 
-                    try:
-                        stock = int(row.get("Stock") or row.get("stock") or 0)
-                    except (ValueError, TypeError):
-                        stock = 0
+                # Normalize keys: lowercase and stripped of BOM / whitespace
+                row = {
+                    str(k).strip().lstrip('\ufeff').lower(): v
+                    for k, v in raw_row.items()
+                    if k is not None
+                }
 
-                    unit = (row.get("Unit") or row.get("unit") or "Pcs").strip() or "Pcs"
-                    discount_base = (row.get("Discount On") or row.get("discount_base") or "Price").strip() or "Price"
+                category = (
+                    row.get("category") or
+                    row.get("cat") or
+                    row.get("group") or
+                    "General"
+                )
+                category = str(category).strip() or "General"
 
-                    # Check if already exists in DB (case-insensitive)
+                product_name = (
+                    row.get("product name") or
+                    row.get("product") or
+                    row.get("name") or
+                    row.get("item name") or
+                    row.get("item") or
+                    row.get("description") or
+                    ""
+                )
+                product_name = str(product_name).strip()
+
+                if not product_name:
+                    skipped_count += 1
+                    continue
+
+                # Clean and parse MRP
+                try:
+                    mrp_str = str(row.get("mrp") or row.get("maximum retail price") or 0).replace(",", "").strip()
+                    mrp = float(mrp_str)
+                except (ValueError, TypeError):
+                    mrp = 0.0
+
+                # Clean and parse Purchase Price
+                try:
+                    pp_str = str(row.get("purchase price") or row.get("purchase_price") or row.get("cost price") or row.get("cost") or row.get("buy price") or 0).replace(",", "").strip()
+                    purchase_price = float(pp_str)
+                except (ValueError, TypeError):
+                    purchase_price = 0.0
+
+                # Clean and parse Selling Price
+                try:
+                    sp_str = str(row.get("selling price") or row.get("selling_price") or row.get("sale price") or row.get("rate") or row.get("price") or 0).replace(",", "").strip()
+                    selling_price = float(sp_str)
+                except (ValueError, TypeError):
+                    selling_price = 0.0
+
+                # Clean and parse Stock
+                try:
+                    stock_str = str(row.get("stock") or row.get("stock quantity") or row.get("qty") or row.get("quantity") or 0).replace(",", "").strip()
+                    stock = int(float(stock_str))
+                except (ValueError, TypeError):
+                    stock = 0
+
+                unit = str(row.get("unit") or row.get("uom") or "Pcs").strip() or "Pcs"
+                discount_base = str(row.get("discount on") or row.get("discount_base") or row.get("disc on") or "Price").strip()
+                if discount_base.lower() in ("mrp", "on mrp"):
+                    discount_base = "MRP"
+                else:
+                    discount_base = "Price"
+
+                # Ensure category exists in categories table
+                try:
+                    add_category(category)
+                except Exception:
+                    pass
+
+                # Check if already exists in DB (case-insensitive)
+                cursor.execute("""
+                    SELECT id FROM products
+                    WHERE LOWER(TRIM(COALESCE(category, 'General'))) = LOWER(TRIM(?))
+                      AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+                    LIMIT 1
+                """, (category, product_name))
+                existing_prod = cursor.fetchone()
+
+                if existing_prod:
+                    # Update existing product without creating duplicate row
                     cursor.execute("""
-                        SELECT id FROM products
-                        WHERE LOWER(TRIM(COALESCE(category, 'General'))) = LOWER(TRIM(?))
-                          AND LOWER(TRIM(name)) = LOWER(TRIM(?))
-                        LIMIT 1
-                    """, (category, product_name))
-                    existing_prod = cursor.fetchone()
+                        UPDATE products
+                        SET mrp = ?, purchase_price = ?, selling_price = ?, unit = ?, stock = ?, discount_base = ?
+                        WHERE id = ?
+                    """, (mrp, purchase_price, selling_price, unit, stock, discount_base, existing_prod[0]))
+                    updated_count += 1
+                else:
+                    # Insert new unique product
+                    cursor.execute("""
+                        INSERT INTO products(category, name, mrp, purchase_price, selling_price, unit, stock, discount_base)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (category, product_name, mrp, purchase_price, selling_price, unit, stock, discount_base))
+                    added_count += 1
 
-                    if existing_prod:
-                        # Update existing product without creating duplicate row
-                        cursor.execute("""
-                            UPDATE products
-                            SET mrp = ?, purchase_price = ?, selling_price = ?, unit = ?, stock = ?, discount_base = ?
-                            WHERE id = ?
-                        """, (mrp, purchase_price, selling_price, unit, stock, discount_base, existing_prod[0]))
-                        updated_count += 1
-                    else:
-                        # Insert new unique product
-                        cursor.execute("""
-                            INSERT INTO products(category, name, mrp, purchase_price, selling_price, unit, stock, discount_base)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (category, product_name, mrp, purchase_price, selling_price, unit, stock, discount_base))
-                        added_count += 1
+            conn.commit()
+            conn.close()
 
-                conn.commit()
-                conn.close()
-
+            self.load_categories()
             self.load_products()
 
             record_audit_log(
@@ -1333,6 +1408,7 @@ class InventoryUI:
                 f"Failed to import products from CSV:\n{e}",
                 parent=self.frame.winfo_toplevel()
             )
+
 
 
     # =====================================

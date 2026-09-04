@@ -460,8 +460,9 @@ class DashboardUI:
                 return
             try:
                 import csv
-                with open(file_path, "w", newline="", encoding="utf-8") as f:
+                with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
                     writer = csv.writer(f)
+
                     writer.writerow(["Log ID", "Timestamp", "Action Type", "Event Description", "Authorized By"])
                     for row in logs:
                         writer.writerow(row)
