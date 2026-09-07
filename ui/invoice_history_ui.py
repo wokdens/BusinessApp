@@ -358,7 +358,8 @@ class InvoiceHistoryUI:
         if not selected:
             return
 
-        values = self.tree.item(selected)["values"]
+        inv_iid = selected[0]
+        values = self.tree.item(inv_iid)["values"]
         invoice_display = str(values[1])  # Display format: INV-DDMMYY_01_customername
         clean_num = invoice_display.replace("INV-", "").strip()
 
@@ -398,7 +399,7 @@ class InvoiceHistoryUI:
 
         def do_open(format_type):
             dialog.destroy()
-            self._generate_and_open_invoice(clean_num, format_type)
+            self._generate_and_open_invoice(inv_iid, clean_num, format_type)
 
         # 1. Thermal POS button (Indigo)
         thermal_btn = tk.Button(
@@ -428,11 +429,19 @@ class InvoiceHistoryUI:
         )
         a4_btn.pack(fill="x", pady=5)
 
-    def _generate_and_open_invoice(self, clean_num, format_type):
+    def _generate_and_open_invoice(self, inv_iid, clean_num, format_type):
         from ui.invoice_ui import generate_thermal_receipt_pdf, generate_a4_invoice_pdf, open_pdf_file
-        from database import get_invoice_by_number, get_invoice_items
+        from database import get_invoice_details_by_id, get_invoice_by_number, get_invoice_items
 
-        inv_data = get_invoice_by_number(clean_num)
+        inv_data = None
+        try:
+            inv_data = get_invoice_details_by_id(int(inv_iid))
+        except (ValueError, TypeError):
+            pass
+
+        if not inv_data:
+            inv_data = get_invoice_by_number(clean_num)
+
         if not inv_data:
             messagebox.showerror("Error", f"Invoice record not found for {clean_num}", parent=self.frame.winfo_toplevel())
             return

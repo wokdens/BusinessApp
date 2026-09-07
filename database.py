@@ -1457,7 +1457,7 @@ def get_invoice_details_by_id(invoice_id):
 
 
 def get_invoice_by_number(invoice_number):
-    """Get invoice row by invoice_number string (with or without 'INV-' prefix)"""
+    """Get invoice row by invoice_number, display string, or ID (with or without 'INV-' prefix or customer suffix)"""
     clean_num = str(invoice_number).strip()
     if clean_num.upper().startswith("INV-"):
         clean_num = clean_num[4:].strip()
@@ -1476,9 +1476,12 @@ def get_invoice_by_number(invoice_number):
         COALESCE(invoices.note, '')
     FROM invoices
     JOIN customers ON invoices.customer_id = customers.id
-    WHERE invoices.invoice_number = ? OR invoices.invoice_number LIKE ?
+    WHERE invoices.invoice_number = ? 
+       OR ? LIKE (invoices.invoice_number || '%')
+       OR invoices.id = ?
+    ORDER BY invoices.id DESC
     LIMIT 1
-    """, (clean_num, f"{clean_num}%"))
+    """, (clean_num, clean_num, int(clean_num) if clean_num.isdigit() else -1))
 
     data = cursor.fetchone()
     conn.close()
