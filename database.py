@@ -1456,6 +1456,36 @@ def get_invoice_details_by_id(invoice_id):
     return data
 
 
+def get_invoice_by_number(invoice_number):
+    """Get invoice row by invoice_number string (with or without 'INV-' prefix)"""
+    clean_num = str(invoice_number).strip()
+    if clean_num.upper().startswith("INV-"):
+        clean_num = clean_num[4:].strip()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT
+        invoices.id,
+        invoices.invoice_number,
+        customers.name,
+        COALESCE(strftime('%d-%m-%Y', invoices.invoice_date), 'N/A'),
+        invoices.total,
+        invoices.paid,
+        invoices.pending,
+        COALESCE(invoices.note, '')
+    FROM invoices
+    JOIN customers ON invoices.customer_id = customers.id
+    WHERE invoices.invoice_number = ? OR invoices.invoice_number LIKE ?
+    LIMIT 1
+    """, (clean_num, f"{clean_num}%"))
+
+    data = cursor.fetchone()
+    conn.close()
+    return data
+
+
+
 def get_invoice_items(invoice_id):
     """Get all items in an invoice"""
     conn = get_connection()

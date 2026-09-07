@@ -354,43 +354,128 @@ class InvoiceHistoryUI:
         ).pack(side="left", padx=10)
 
     def open_invoice_pdf(self):
-
         selected = self.tree.selection()
-
         if not selected:
             return
 
-        values = self.tree.item(
-            selected
-        )["values"]
+        values = self.tree.item(selected)["values"]
+        invoice_display = str(values[1])  # Display format: INV-DDMMYY_01_customername
+        clean_num = invoice_display.replace("INV-", "").strip()
 
-        invoice_display = values[1]  # Display format: INV-DDMMYY_01_customername
+        # Modal to choose format: 80mm Thermal Receipt or A4 PDF
+        dialog = tk.Toplevel(self.frame)
+        dialog.title("Print / Export Options")
+        dialog.geometry("450x260")
+        dialog.resizable(False, False)
+        dialog.transient(self.frame.winfo_toplevel())
+        dialog.grab_set()
 
+        # Center on parent window
+        dialog.update_idletasks()
+        try:
+            px = self.frame.winfo_toplevel().winfo_rootx() + (self.frame.winfo_toplevel().winfo_width() // 2) - 225
+            py = self.frame.winfo_toplevel().winfo_rooty() + (self.frame.winfo_toplevel().winfo_height() // 2) - 130
+            dialog.geometry(f"450x260+{max(0, px)}+{max(0, py)}")
+        except Exception:
+            pass
 
-        abs_path = os.path.join(
-            INVOICES_DIR,
-            f"{invoice_display}.pdf"
+        tk.Label(
+            dialog,
+            text=f"Estimate #{invoice_display}",
+            font=("Arial", 13, "bold"),
+            fg="#1e293b"
+        ).pack(pady=(18, 4))
+
+        tk.Label(
+            dialog,
+            text="Choose print format or export document:",
+            font=("Arial", 10),
+            fg="#64748b"
+        ).pack(pady=(0, 16))
+
+        btn_frame = tk.Frame(dialog)
+        btn_frame.pack(fill="x", padx=30, pady=5)
+
+        def do_open(format_type):
+            dialog.destroy()
+            self._generate_and_open_invoice(clean_num, format_type)
+
+        # 1. Thermal POS button (Indigo)
+        thermal_btn = tk.Button(
+            btn_frame,
+            text="🖨️ 80mm Thermal POS Receipt\n(Direct print for H80i / POS roll)",
+            command=lambda: do_open("thermal"),
+            bg="#5634f0",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            relief="raised",
+            bd=2,
+            pady=8
         )
+        thermal_btn.pack(fill="x", pady=5)
 
-        if not os.path.exists(abs_path):
+        # 2. A4 PDF button (Emerald)
+        a4_btn = tk.Button(
+            btn_frame,
+            text="📄 Standard A4 PDF\n(For WhatsApp sharing & A4 printers)",
+            command=lambda: do_open("a4"),
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            relief="raised",
+            bd=2,
+            pady=8
+        )
+        a4_btn.pack(fill="x", pady=5)
 
+    def _generate_and_open_invoice(self, clean_num, format_type):
+        from ui.invoice_ui import generate_thermal_receipt_pdf, generate_a4_invoice_pdf, open_pdf_file
+        from database import get_invoice_by_number, get_invoice_items
 
-            messagebox.showerror(
-                "Error",
-                f"PDF not found at {abs_path}"
-            )
-
+        inv_data = get_invoice_by_number(clean_num)
+        if not inv_data:
+            messagebox.showerror("Error", f"Invoice record not found for {clean_num}", parent=self.frame.winfo_toplevel())
             return
 
-        try:
-            if os.name == "nt":
-                os.startfile(abs_path)
-            else:
-                import subprocess
-                opener = "open" if os.name == "darwin" else "xdg-open"
-                subprocess.Popen([opener, abs_path])
-        except Exception as e:
-            messagebox.showerror(
-                "Error",
-                f"Could not open PDF: {str(e)}"
+        inv_id, inv_number, customer_name, date_str, total, paid, pending, note = inv_data
+        items = get_invoice_items(inv_id)
+
+        safe_name = "".join(
+            c for c in customer_name if c.isalnum() or c in (" ", "-", "_")
+        ).strip().replace(" ", "_")
+
+        if format_type == "thermal":
+            thermal_filename = f"INV-{inv_number}_{safe_name}_80mm.pdf" if safe_name else f"INV-{inv_number}_80mm.pdf"
+            thermal_path = os.path.join(INVOICES_DIR, thermal_filename)
+            if os.path.exists(thermal_path):
+                open_pdf_file(thermal_path)
+                return
+
+            generate_thermal_receipt_pdf(
+                invoice_number=inv_number,
+                customer_name=customer_name,
+                items=items,
+                grand_total=total,
+                paid_amount=paid,
+                note=note,
+                date_str=date_str,
+                open_file=True
             )
+        else:
+            a4_filename = f"INV-{inv_number}_{safe_name}.pdf" if safe_name else f"INV-{inv_number}.pdf"
+            a4_path = os.path.join(INVOICES_DIR, a4_filename)
+            if os.path.exists(a4_path):
+                open_pdf_file(a4_path)
+                return
+
+            generate_a4_invoice_pdf(
+                invoice_number=inv_number,
+                customer_name=customer_name,
+                items=items,
+                grand_total=total,
+                paid_amount=paid,
+                note=note,
+                date_str=date_str,
+                open_file=True
+            )
+

@@ -1156,14 +1156,54 @@ class LedgerUI:
         pay_partial_entry.bind("<FocusIn>", lambda e: pay_partial_entry.selection_range(0, tk.END))
         dialog.bind("<Escape>", lambda e: dialog.destroy())
 
+        def open_thermal_receipt():
+            from ui.invoice_ui import generate_thermal_receipt_pdf, open_pdf_file
+            from database import INVOICES_DIR
+            safe_name = "".join(c for c in customer_name if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+            thermal_filename = f"INV-{inv_number}_{safe_name}_80mm.pdf" if safe_name else f"INV-{inv_number}_80mm.pdf"
+            thermal_path = os.path.join(INVOICES_DIR, thermal_filename)
+            if os.path.exists(thermal_path):
+                open_pdf_file(thermal_path)
+            else:
+                generate_thermal_receipt_pdf(
+                    invoice_number=inv_number,
+                    customer_name=customer_name,
+                    items=invoice_items,
+                    grand_total=total,
+                    paid_amount=paid,
+                    note=note,
+                    date_str=date_str,
+                    open_file=True
+                )
+
+        def open_a4_pdf():
+            from ui.invoice_ui import generate_a4_invoice_pdf, open_pdf_file
+            from database import INVOICES_DIR
+            safe_name = "".join(c for c in customer_name if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+            a4_filename = f"INV-{inv_number}_{safe_name}.pdf" if safe_name else f"INV-{inv_number}.pdf"
+            a4_path = os.path.join(INVOICES_DIR, a4_filename)
+            if os.path.exists(a4_path):
+                open_pdf_file(a4_path)
+            else:
+                generate_a4_invoice_pdf(
+                    invoice_number=inv_number,
+                    customer_name=customer_name,
+                    items=invoice_items,
+                    grand_total=total,
+                    paid_amount=paid,
+                    note=note,
+                    date_str=date_str,
+                    open_file=True
+                )
+
         clear_bill_btn = tk.Button(
             button_frame,
             text="Clear Bill",
             command=clear_bill,
-            bg="#5634f0",
+            bg="#d9534f",
             fg="white",
             font=("Arial", 10, "bold"),
-            width=18
+            padx=10
         )
         clear_bill_btn.pack(side="left", padx=5)
 
@@ -1171,12 +1211,34 @@ class LedgerUI:
             button_frame,
             text="Pay Partially (Enter)",
             command=pay_partially,
-            bg="#66cc66",
+            bg="#0275d8",
             fg="white",
             font=("Arial", 10, "bold"),
-            width=18
+            padx=10
         )
         pay_partial_btn.pack(side="left", padx=5)
+
+        thermal_btn = tk.Button(
+            button_frame,
+            text="🖨️ 80mm Thermal",
+            command=open_thermal_receipt,
+            bg="#5634f0",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=10
+        )
+        thermal_btn.pack(side="left", padx=5)
+
+        a4_btn = tk.Button(
+            button_frame,
+            text="📄 A4 PDF",
+            command=open_a4_pdf,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=10
+        )
+        a4_btn.pack(side="left", padx=5)
 
         cancel_btn = tk.Button(
             button_frame,
@@ -1184,8 +1246,9 @@ class LedgerUI:
             command=dialog.destroy,
             bg="#cccccc",
             font=("Arial", 10, "bold"),
-            width=18
+            padx=10
         )
         cancel_btn.pack(side="left", padx=5)
+
 
 
