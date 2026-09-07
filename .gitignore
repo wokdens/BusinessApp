@@ -1,4 +1,4 @@
-﻿# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,11 +19,18 @@ env/
 
 # Databases & Backups & Generated Invoices
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
 database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
 backups/
 invoices/
 .webui_secret_key
+
 
 # IDE & Editor files
 .vscode/
