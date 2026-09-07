@@ -24,6 +24,432 @@ import textwrap
 
 from config import INVOICES_DIR
 
+
+def _normalize_items(raw_items):
+    """Normalizes both dict-based cart items and tuple-based database items into a uniform structure"""
+    normalized = []
+    for it in raw_items:
+        if isinstance(it, dict):
+            normalized.append({
+                "name": str(it.get("name", "")),
+                "quantity": it.get("quantity", 0),
+                "price": float(it.get("price", 0) or 0),
+                "mrp": float(it.get("mrp", 0) or 0),
+                "unit": str(it.get("unit", "Pcs") or "Pcs"),
+                "discount": float(it.get("discount", 0) or 0),
+                "discount_base": str(it.get("discount_base", "Price") or "Price"),
+                "total": float(it.get("total", 0) or 0)
+            })
+        elif isinstance(it, (list, tuple)):
+            if len(it) == 7:
+                qty, name, price, unit, disc, disc_base, tot = it
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "price": float(price or 0),
+                    "mrp": 0.0,
+                    "unit": str(unit or "Pcs"),
+                    "discount": float(disc or 0),
+                    "discount_base": str(disc_base or "Price"),
+                    "total": float(tot or 0)
+                })
+            elif len(it) >= 8:
+                qty, name, mrp, price, unit, disc, disc_base, tot = it[:8]
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "price": float(price or 0),
+                    "mrp": float(mrp or 0),
+                    "unit": str(unit or "Pcs"),
+                    "discount": float(disc or 0),
+                    "discount_base": str(disc_base or "Price"),
+                    "total": float(tot or 0)
+                })
+    return normalized
+
+
+def open_pdf_file(path):
+    """Opens a PDF file in the system default viewer/printer application"""
+    try:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            if os.name == "nt":
+                os.startfile(abs_path)
+            else:
+                import subprocess
+                opener = "open" if os.name == "darwin" else "xdg-open"
+                subprocess.Popen([opener, abs_path])
+    except Exception:
+        pass
+
+
+def generate_thermal_receipt_pdf(
+    invoice_number,
+    customer_name,
+    items,
+    grand_total,
+    paid_amount=0,
+    note="",
+    date_str=None,
+    open_file=False
+):
+    """Generates a dedicated 80mm (3-Inch) Thermal POS Receipt for H80i and thermal printers"""
+    safe_name = "".join(
+        c for c in customer_name if c.isalnum() or c in (" ", "-", "_")
+    ).strip().replace(" ", "_")
+
+    clean_num = str(invoice_number).replace("INV-", "").strip()
+    if safe_name:
+        filename = f"INV-{clean_num}_{safe_name}_80mm.pdf"
+    else:
+        filename = f"INV-{clean_num}_80mm.pdf"
+
+    path = os.path.join(INVOICES_DIR, filename)
+    normalized_items = _normalize_items(items)
+
+    width = 226.77  # 80mm in points (standard 3-inch roll)
+    margin = 8
+    printable_width = width - (2 * margin)
+
+    # Calculate dynamic height based on item rows and note
+    header_h = 75
+    table_header_h = 20
+    items_h = 0
+    wrapped_items = []
+    for idx, it in enumerate(normalized_items, 1):
+        w_name = textwrap.wrap(it["name"], width=24) or ["Item"]
+        h = len(w_name) * 10 + 16
+        items_h += h
+        wrapped_items.append((idx, it, w_name, h))
+
+    summary_h = 58
+    note_lines = textwrap.wrap(note.strip(), width=30) if note and note.strip() else []
+    if note_lines:
+        summary_h += len(note_lines) * 10 + 10
+
+    footer_h = 44
+    feed_padding = 25
+    total_height = max(240, header_h + table_header_h + items_h + summary_h + footer_h + feed_padding)
+
+    pdf = canvas.Canvas(path, pagesize=(width, total_height))
+
+    # Header
+    curr_y = total_height - 18
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawCentredString(width / 2, curr_y, "ESTIMATE ONLY")
+
+    curr_y -= 14
+    pdf.setFont("Helvetica", 7.5)
+    d_str = date_str or datetime.now().strftime("%d-%m-%Y  %I:%M %p")
+    pdf.drawCentredString(width / 2, curr_y, f"Date: {d_str}")
+
+    curr_y -= 13
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawString(margin, curr_y, f"Est No : INV-{clean_num}")
+
+    curr_y -= 11
+    pdf.drawString(margin, curr_y, f"Customer: {customer_name.upper()}")
+
+    curr_y -= 6
+    pdf.setDash(2, 2)
+    pdf.setLineWidth(0.6)
+    pdf.line(margin, curr_y, width - margin, curr_y)
+
+    # Table Header
+    curr_y -= 10
+    pdf.setFont("Helvetica-Bold", 7.5)
+    pdf.drawString(margin, curr_y, "S#")
+    pdf.drawString(margin + 16, curr_y, "ITEM DESCRIPTION")
+
+    curr_y -= 4
+    pdf.line(margin, curr_y, width - margin, curr_y)
+    pdf.setDash()
+
+    # Items
+    curr_y -= 10
+    for idx, it, w_name, h in wrapped_items:
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(margin, curr_y, f"{idx}.")
+        yy = curr_y
+        for l in w_name:
+            pdf.drawString(margin + 16, yy, l)
+            yy -= 10
+
+        # Sub-line: Qty x Rate (-Disc%) ... Total
+        qty_str = f"{it['quantity']} {it.get('unit', 'Pcs')} x Rs.{it['price']:,.2f}"
+        disc_val = float(it.get('discount', 0))
+        if disc_val > 0:
+            disc_tag = f"-{int(disc_val) if disc_val.is_integer() else disc_val}%"
+            qty_str += f" ({disc_tag})"
+
+        pdf.setFont("Helvetica", 7.5)
+        pdf.drawString(margin + 16, yy, qty_str)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawRightString(width - margin, yy, f"Rs.{it['total']:,.2f}")
+
+        curr_y = yy - 12
+
+    # Divider
+    pdf.setDash(2, 2)
+    pdf.line(margin, curr_y + 4, width - margin, curr_y + 4)
+    pdf.setDash()
+
+    # Summary
+    curr_y -= 10
+    total_qty = sum(float(it.get('quantity', 0)) for it in normalized_items)
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(margin, curr_y, f"Total Items: {len(normalized_items)} (Qty: {int(total_qty) if total_qty.is_integer() else total_qty})")
+
+    curr_y -= 16
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.drawRightString(width - margin, curr_y, f"GRAND TOTAL: Rs. {grand_total:,.2f}")
+
+    if note_lines:
+        curr_y -= 13
+        pdf.setFont("Helvetica-Bold", 7.5)
+        pdf.drawString(margin, curr_y, "Note: " + note_lines[0])
+        for nl in note_lines[1:]:
+            curr_y -= 9
+            pdf.drawString(margin + 24, curr_y, nl)
+
+    curr_y -= 8
+    pdf.setDash(2, 2)
+    pdf.line(margin, curr_y + 4, width - margin, curr_y + 4)
+    pdf.setDash()
+
+    # Footer
+    curr_y -= 12
+    pdf.setFont("Helvetica", 7)
+    pdf.drawCentredString(width / 2, curr_y, "GST as per applicable. Order against PO.")
+
+    curr_y -= 10
+    pdf.setFont("Helvetica-Bold", 7.5)
+    pdf.drawCentredString(width / 2, curr_y, "⚡ Powered by wokdens.com")
+
+    pdf.save()
+
+    if open_file:
+        open_pdf_file(path)
+
+    return path
+
+
+def generate_a4_invoice_pdf(
+    invoice_number,
+    customer_name,
+    items,
+    grand_total,
+    paid_amount=0,
+    note="",
+    date_str=None,
+    open_file=False
+):
+    """Generates standard / compact A4 Invoice PDF (for WhatsApp sharing and A4 printers)"""
+    safe_name = "".join(
+        c for c in customer_name if c.isalnum() or c in (" ", "-", "_")
+    ).strip().replace(" ", "_")
+
+    clean_num = str(invoice_number).replace("INV-", "").strip()
+    if safe_name:
+        path = os.path.join(INVOICES_DIR, f"INV-{clean_num}_{safe_name}.pdf")
+    else:
+        path = os.path.join(INVOICES_DIR, f"INV-{clean_num}.pdf")
+
+    normalized_items = _normalize_items(items)
+
+    pdf = canvas.Canvas(path)
+    page_width, page_height = 595.27, 841.89  # Standard A4
+
+    # =====================================
+    # HEADER (ESTIMATE ONLY - NO SHOP DETAILS)
+    # =====================================
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.setFillColorRGB(0.12, 0.14, 0.18)
+    pdf.drawString(40, 805, "ESTIMATE ONLY")
+
+    pdf.setFont("Helvetica", 9)
+    pdf.setFillColorRGB(0.35, 0.38, 0.42)
+    d_str = date_str or datetime.now().strftime("%d-%m-%Y  %I:%M %p")
+    pdf.drawRightString(555, 805, f"Date: {d_str}")
+
+    pdf.setStrokeColorRGB(0.8, 0.83, 0.88)
+    pdf.setLineWidth(1)
+    pdf.line(40, 792, 555, 792)
+
+    # =====================================
+    # ESTIMATE & CUSTOMER INFO
+    # =====================================
+    pdf.setFont("Helvetica-Bold", 9.5)
+    pdf.setFillColorRGB(0.2, 0.2, 0.2)
+    pdf.drawString(40, 775, f"Estimate No : INV-{clean_num}")
+    pdf.drawString(280, 775, f"Customer : {customer_name.upper()}")
+
+    # =====================================
+    # TABLE HEADER
+    # =====================================
+    table_top = 758
+    header_height = 20
+
+    pdf.setFillColorRGB(0.93, 0.94, 0.97)
+    pdf.rect(40, table_top - header_height, 515, header_height, fill=True, stroke=False)
+
+    pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
+    pdf.setLineWidth(0.8)
+    pdf.rect(40, table_top - header_height, 515, header_height, fill=False, stroke=True)
+
+    headers = [
+        ("S.No", 55, "center"),
+        ("Qty", 82, "center"),
+        ("Product Description", 110, "left"),
+        ("MRP", 330, "right"),
+        ("Price", 380, "right"),
+        ("Unit", 415, "center"),
+        ("Discount", 465, "center"),
+        ("Total (Rs.)", 548, "right")
+    ]
+
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.setFillColorRGB(0.15, 0.18, 0.25)
+
+    for title, x_pos, align in headers:
+        if align == "center":
+            pdf.drawCentredString(x_pos, table_top - 14, title)
+        elif align == "right":
+            pdf.drawRightString(x_pos, table_top - 14, title)
+        else:
+            pdf.drawString(x_pos, table_top - 14, title)
+
+    # =====================================
+    # TABLE ROWS
+    # =====================================
+    current_y = table_top - header_height - 13
+    serial = 1
+
+    for item in normalized_items:
+        wrapped_product = textwrap.wrap(item["name"], width=32) or ["Item"]
+        lines_count = len(wrapped_product)
+        row_height = 16 if lines_count <= 1 else (lines_count * 11 + 5)
+
+        if current_y - row_height < 90:
+            pdf.showPage()
+            current_y = 800
+            pdf.setFont("Helvetica", 8.5)
+
+        if serial % 2 == 0:
+            pdf.setFillColorRGB(0.98, 0.98, 0.99)
+            pdf.rect(40, current_y - row_height + 11, 515, row_height, fill=True, stroke=False)
+
+        pdf.setFont("Helvetica", 8.5)
+        pdf.setFillColorRGB(0.15, 0.15, 0.15)
+
+        # 1. S.No
+        pdf.drawCentredString(55, current_y, str(serial))
+
+        # 2. Qty
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawCentredString(82, current_y, str(item["quantity"]))
+        pdf.setFont("Helvetica", 8.5)
+
+        # 3. Product Description
+        yy = current_y
+        for line in wrapped_product:
+            pdf.drawString(110, yy, line)
+            yy -= 11
+
+        # 4. MRP
+        mrp_val = float(item.get("mrp", 0))
+        pdf.drawRightString(330, current_y, f"{mrp_val:,.1f}" if mrp_val > 0 else "-")
+
+        # 5. Price
+        price_val = float(item.get("price", 0))
+        pdf.drawRightString(380, current_y, f"{price_val:,.2f}")
+
+        # 6. Unit
+        pdf.drawCentredString(415, current_y, str(item.get("unit", "Pcs") or "Pcs"))
+
+        # 7. Discount
+        discount_value = float(item.get("discount", 0))
+        if discount_value > 0:
+            disc_base = item.get("discount_base", "Price")
+            disc_str = f"{int(discount_value) if discount_value.is_integer() else discount_value}% on {disc_base}"
+        else:
+            disc_str = "0%"
+        pdf.drawCentredString(465, current_y, disc_str)
+
+        # 8. Total
+        total_val = float(item.get("total", 0))
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawRightString(548, current_y, f"{total_val:,.2f}")
+        pdf.setFont("Helvetica", 8.5)
+
+        # Bottom row divider line
+        pdf.setStrokeColorRGB(0.9, 0.91, 0.94)
+        pdf.setLineWidth(0.5)
+        pdf.line(40, current_y - row_height + 11, 555, current_y - row_height + 11)
+
+        current_y -= row_height
+        serial += 1
+
+    # Table outer border
+    table_bottom = current_y + 11
+    pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
+    pdf.setLineWidth(0.8)
+    pdf.rect(40, table_bottom, 515, (table_top - table_bottom), fill=False, stroke=True)
+
+    # Vertical Column Divider Lines
+    v_dividers = [70, 95, 290, 340, 395, 435, 495]
+    pdf.setStrokeColorRGB(0.88, 0.89, 0.92)
+    pdf.setLineWidth(0.5)
+    for vx in v_dividers:
+        pdf.line(vx, table_top, vx, table_bottom)
+
+    # Summary Section
+    summary_y = table_bottom - 16
+    if note and note.strip():
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.setFillColorRGB(0.2, 0.2, 0.2)
+        pdf.drawString(45, summary_y - 2, f"Note / Remarks: {note.strip()}")
+
+    total_box_width = 190
+    total_box_height = 30
+    total_box_x = 365
+    total_box_y = summary_y - total_box_height + 10
+
+    pdf.setFillColorRGB(0.94, 0.96, 1.0)
+    pdf.rect(total_box_x, total_box_y, total_box_width, total_box_height, fill=True, stroke=False)
+    pdf.setStrokeColorRGB(0.2, 0.35, 0.65)
+    pdf.setLineWidth(1)
+    pdf.rect(total_box_x, total_box_y, total_box_width, total_box_height, fill=False, stroke=True)
+
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.setFillColorRGB(0.1, 0.2, 0.5)
+    pdf.drawRightString(total_box_x + total_box_width - 10, total_box_y + 9, f"Grand Total:  Rs. {grand_total:,.2f}")
+
+    # Mandatory Footer
+    footer_line_y = total_box_y - 12
+    footer_text_y = footer_line_y - 12
+
+    pdf.setStrokeColorRGB(0.85, 0.88, 0.92)
+    pdf.setLineWidth(0.5)
+    pdf.line(40, footer_line_y, 555, footer_line_y)
+
+    pdf.setFont("Helvetica", 8)
+    pdf.setFillColorRGB(0.35, 0.35, 0.35)
+    pdf.drawString(40, footer_text_y, "GST as per applicable. Order against PO.")
+
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.setFillColorRGB(0.35, 0.35, 0.35)
+    pdf.drawRightString(555, footer_text_y, "⚡ Powered by wokdens.com")
+
+    pdf.save()
+
+    if open_file:
+        open_pdf_file(path)
+
+    return path
+
+
+
 class InvoiceUI:
     _saved_state = None
     
@@ -1172,429 +1598,6 @@ class InvoiceUI:
             open_file=True
         )
 
-
-def _normalize_items(raw_items):
-    """Normalizes both dict-based cart items and tuple-based database items into a uniform structure"""
-    normalized = []
-    for it in raw_items:
-        if isinstance(it, dict):
-            normalized.append({
-                "name": str(it.get("name", "")),
-                "quantity": it.get("quantity", 0),
-                "price": float(it.get("price", 0) or 0),
-                "mrp": float(it.get("mrp", 0) or 0),
-                "unit": str(it.get("unit", "Pcs") or "Pcs"),
-                "discount": float(it.get("discount", 0) or 0),
-                "discount_base": str(it.get("discount_base", "Price") or "Price"),
-                "total": float(it.get("total", 0) or 0)
-            })
-        elif isinstance(it, (list, tuple)):
-            if len(it) == 7:
-                qty, name, price, unit, disc, disc_base, tot = it
-                normalized.append({
-                    "name": str(name),
-                    "quantity": qty,
-                    "price": float(price or 0),
-                    "mrp": 0.0,
-                    "unit": str(unit or "Pcs"),
-                    "discount": float(disc or 0),
-                    "discount_base": str(disc_base or "Price"),
-                    "total": float(tot or 0)
-                })
-            elif len(it) >= 8:
-                qty, name, mrp, price, unit, disc, disc_base, tot = it[:8]
-                normalized.append({
-                    "name": str(name),
-                    "quantity": qty,
-                    "price": float(price or 0),
-                    "mrp": float(mrp or 0),
-                    "unit": str(unit or "Pcs"),
-                    "discount": float(disc or 0),
-                    "discount_base": str(disc_base or "Price"),
-                    "total": float(tot or 0)
-                })
-    return normalized
-
-
-def open_pdf_file(path):
-    """Opens a PDF file in the system default viewer/printer application"""
-    try:
-        abs_path = os.path.abspath(path)
-        if os.path.exists(abs_path):
-            if os.name == "nt":
-                os.startfile(abs_path)
-            else:
-                import subprocess
-                opener = "open" if os.name == "darwin" else "xdg-open"
-                subprocess.Popen([opener, abs_path])
-    except Exception:
-        pass
-
-
-def generate_thermal_receipt_pdf(
-    invoice_number,
-    customer_name,
-    items,
-    grand_total,
-    paid_amount=0,
-    note="",
-    date_str=None,
-    open_file=False
-):
-    """Generates a dedicated 80mm (3-Inch) Thermal POS Receipt for H80i and thermal printers"""
-    safe_name = "".join(
-        c for c in customer_name if c.isalnum() or c in (" ", "-", "_")
-    ).strip().replace(" ", "_")
-
-    clean_num = str(invoice_number).replace("INV-", "").strip()
-    if safe_name:
-        filename = f"INV-{clean_num}_{safe_name}_80mm.pdf"
-    else:
-        filename = f"INV-{clean_num}_80mm.pdf"
-
-    path = os.path.join(INVOICES_DIR, filename)
-    normalized_items = _normalize_items(items)
-
-    width = 226.77  # 80mm in points (standard 3-inch roll)
-    margin = 8
-    printable_width = width - (2 * margin)
-
-    # Calculate dynamic height based on item rows and note
-    header_h = 75
-    table_header_h = 20
-    items_h = 0
-    wrapped_items = []
-    for idx, it in enumerate(normalized_items, 1):
-        w_name = textwrap.wrap(it["name"], width=24) or ["Item"]
-        h = len(w_name) * 10 + 16
-        items_h += h
-        wrapped_items.append((idx, it, w_name, h))
-
-    summary_h = 58
-    note_lines = textwrap.wrap(note.strip(), width=30) if note and note.strip() else []
-    if note_lines:
-        summary_h += len(note_lines) * 10 + 10
-
-    footer_h = 44
-    feed_padding = 25
-    total_height = max(240, header_h + table_header_h + items_h + summary_h + footer_h + feed_padding)
-
-    pdf = canvas.Canvas(path, pagesize=(width, total_height))
-
-    # Header
-    curr_y = total_height - 18
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawCentredString(width / 2, curr_y, "ESTIMATE ONLY")
-
-    curr_y -= 14
-    pdf.setFont("Helvetica", 7.5)
-    d_str = date_str or datetime.now().strftime("%d-%m-%Y  %I:%M %p")
-    pdf.drawCentredString(width / 2, curr_y, f"Date: {d_str}")
-
-    curr_y -= 13
-    pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawString(margin, curr_y, f"Est No : INV-{clean_num}")
-
-    curr_y -= 11
-    pdf.drawString(margin, curr_y, f"Customer: {customer_name.upper()}")
-
-    curr_y -= 6
-    pdf.setDash(2, 2)
-    pdf.setLineWidth(0.6)
-    pdf.line(margin, curr_y, width - margin, curr_y)
-
-    # Table Header
-    curr_y -= 10
-    pdf.setFont("Helvetica-Bold", 7.5)
-    pdf.drawString(margin, curr_y, "S#")
-    pdf.drawString(margin + 16, curr_y, "ITEM DESCRIPTION")
-
-    curr_y -= 4
-    pdf.line(margin, curr_y, width - margin, curr_y)
-    pdf.setDash()
-
-    # Items
-    curr_y -= 10
-    for idx, it, w_name, h in wrapped_items:
-        pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(margin, curr_y, f"{idx}.")
-        yy = curr_y
-        for l in w_name:
-            pdf.drawString(margin + 16, yy, l)
-            yy -= 10
-
-        # Sub-line: Qty x Rate (-Disc%) ... Total
-        qty_str = f"{it['quantity']} {it.get('unit', 'Pcs')} x Rs.{it['price']:,.2f}"
-        disc_val = float(it.get('discount', 0))
-        if disc_val > 0:
-            disc_tag = f"-{int(disc_val) if disc_val.is_integer() else disc_val}%"
-            qty_str += f" ({disc_tag})"
-
-        pdf.setFont("Helvetica", 7.5)
-        pdf.drawString(margin + 16, yy, qty_str)
-        pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawRightString(width - margin, yy, f"Rs.{it['total']:,.2f}")
-
-        curr_y = yy - 12
-
-    # Divider
-    pdf.setDash(2, 2)
-    pdf.line(margin, curr_y + 4, width - margin, curr_y + 4)
-    pdf.setDash()
-
-    # Summary
-    curr_y -= 10
-    total_qty = sum(float(it.get('quantity', 0)) for it in normalized_items)
-    pdf.setFont("Helvetica", 8)
-    pdf.drawString(margin, curr_y, f"Total Items: {len(normalized_items)} (Qty: {int(total_qty) if total_qty.is_integer() else total_qty})")
-
-    curr_y -= 16
-    pdf.setFont("Helvetica-Bold", 10.5)
-    pdf.drawRightString(width - margin, curr_y, f"GRAND TOTAL: Rs. {grand_total:,.2f}")
-
-    if note_lines:
-        curr_y -= 13
-        pdf.setFont("Helvetica-Bold", 7.5)
-        pdf.drawString(margin, curr_y, "Note: " + note_lines[0])
-        for nl in note_lines[1:]:
-            curr_y -= 9
-            pdf.drawString(margin + 24, curr_y, nl)
-
-    curr_y -= 8
-    pdf.setDash(2, 2)
-    pdf.line(margin, curr_y + 4, width - margin, curr_y + 4)
-    pdf.setDash()
-
-    # Footer
-    curr_y -= 12
-    pdf.setFont("Helvetica", 7)
-    pdf.drawCentredString(width / 2, curr_y, "GST as per applicable. Order against PO.")
-
-    curr_y -= 10
-    pdf.setFont("Helvetica-Bold", 7.5)
-    pdf.drawCentredString(width / 2, curr_y, "⚡ Powered by wokdens.com")
-
-    pdf.save()
-
-    if open_file:
-        open_pdf_file(path)
-
-    return path
-
-
-def generate_a4_invoice_pdf(
-    invoice_number,
-    customer_name,
-    items,
-    grand_total,
-    paid_amount=0,
-    note="",
-    date_str=None,
-    open_file=False
-):
-    """Generates standard / compact A4 Invoice PDF (for WhatsApp sharing and A4 printers)"""
-    safe_name = "".join(
-        c for c in customer_name if c.isalnum() or c in (" ", "-", "_")
-    ).strip().replace(" ", "_")
-
-    clean_num = str(invoice_number).replace("INV-", "").strip()
-    if safe_name:
-        path = os.path.join(INVOICES_DIR, f"INV-{clean_num}_{safe_name}.pdf")
-    else:
-        path = os.path.join(INVOICES_DIR, f"INV-{clean_num}.pdf")
-
-    normalized_items = _normalize_items(items)
-
-    pdf = canvas.Canvas(path)
-    page_width, page_height = 595.27, 841.89  # Standard A4
-
-    # =====================================
-    # HEADER (ESTIMATE ONLY - NO SHOP DETAILS)
-    # =====================================
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.setFillColorRGB(0.12, 0.14, 0.18)
-    pdf.drawString(40, 805, "ESTIMATE ONLY")
-
-    pdf.setFont("Helvetica", 9)
-    pdf.setFillColorRGB(0.35, 0.38, 0.42)
-    d_str = date_str or datetime.now().strftime("%d-%m-%Y  %I:%M %p")
-    pdf.drawRightString(555, 805, f"Date: {d_str}")
-
-    pdf.setStrokeColorRGB(0.8, 0.83, 0.88)
-    pdf.setLineWidth(1)
-    pdf.line(40, 792, 555, 792)
-
-    # =====================================
-    # ESTIMATE & CUSTOMER INFO
-    # =====================================
-    pdf.setFont("Helvetica-Bold", 9.5)
-    pdf.setFillColorRGB(0.2, 0.2, 0.2)
-    pdf.drawString(40, 775, f"Estimate No : INV-{clean_num}")
-    pdf.drawString(280, 775, f"Customer : {customer_name.upper()}")
-
-    # =====================================
-    # TABLE HEADER
-    # =====================================
-    table_top = 758
-    header_height = 20
-
-    pdf.setFillColorRGB(0.93, 0.94, 0.97)
-    pdf.rect(40, table_top - header_height, 515, header_height, fill=True, stroke=False)
-
-    pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
-    pdf.setLineWidth(0.8)
-    pdf.rect(40, table_top - header_height, 515, header_height, fill=False, stroke=True)
-
-    headers = [
-        ("S.No", 55, "center"),
-        ("Qty", 82, "center"),
-        ("Product Description", 110, "left"),
-        ("MRP", 330, "right"),
-        ("Price", 380, "right"),
-        ("Unit", 415, "center"),
-        ("Discount", 465, "center"),
-        ("Total (Rs.)", 548, "right")
-    ]
-
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.setFillColorRGB(0.15, 0.18, 0.25)
-
-    for title, x_pos, align in headers:
-        if align == "center":
-            pdf.drawCentredString(x_pos, table_top - 14, title)
-        elif align == "right":
-            pdf.drawRightString(x_pos, table_top - 14, title)
-        else:
-            pdf.drawString(x_pos, table_top - 14, title)
-
-    # =====================================
-    # TABLE ROWS
-    # =====================================
-    current_y = table_top - header_height - 13
-    serial = 1
-
-    for item in normalized_items:
-        wrapped_product = textwrap.wrap(item["name"], width=32) or ["Item"]
-        lines_count = len(wrapped_product)
-        row_height = 16 if lines_count <= 1 else (lines_count * 11 + 5)
-
-        if current_y - row_height < 90:
-            pdf.showPage()
-            current_y = 800
-            pdf.setFont("Helvetica", 8.5)
-
-        if serial % 2 == 0:
-            pdf.setFillColorRGB(0.98, 0.98, 0.99)
-            pdf.rect(40, current_y - row_height + 11, 515, row_height, fill=True, stroke=False)
-
-        pdf.setFont("Helvetica", 8.5)
-        pdf.setFillColorRGB(0.15, 0.15, 0.15)
-
-        # 1. S.No
-        pdf.drawCentredString(55, current_y, str(serial))
-
-        # 2. Qty
-        pdf.setFont("Helvetica-Bold", 8.5)
-        pdf.drawCentredString(82, current_y, str(item["quantity"]))
-        pdf.setFont("Helvetica", 8.5)
-
-        # 3. Product Description
-        yy = current_y
-        for line in wrapped_product:
-            pdf.drawString(110, yy, line)
-            yy -= 11
-
-        # 4. MRP
-        mrp_val = float(item.get("mrp", 0))
-        pdf.drawRightString(330, current_y, f"{mrp_val:,.1f}" if mrp_val > 0 else "-")
-
-        # 5. Price
-        price_val = float(item.get("price", 0))
-        pdf.drawRightString(380, current_y, f"{price_val:,.2f}")
-
-        # 6. Unit
-        pdf.drawCentredString(415, current_y, str(item.get("unit", "Pcs") or "Pcs"))
-
-        # 7. Discount
-        discount_value = float(item.get("discount", 0))
-        if discount_value > 0:
-            disc_base = item.get("discount_base", "Price")
-            disc_str = f"{int(discount_value) if discount_value.is_integer() else discount_value}% on {disc_base}"
-        else:
-            disc_str = "0%"
-        pdf.drawCentredString(465, current_y, disc_str)
-
-        # 8. Total
-        total_val = float(item.get("total", 0))
-        pdf.setFont("Helvetica-Bold", 8.5)
-        pdf.drawRightString(548, current_y, f"{total_val:,.2f}")
-        pdf.setFont("Helvetica", 8.5)
-
-        # Bottom row divider line
-        pdf.setStrokeColorRGB(0.9, 0.91, 0.94)
-        pdf.setLineWidth(0.5)
-        pdf.line(40, current_y - row_height + 11, 555, current_y - row_height + 11)
-
-        current_y -= row_height
-        serial += 1
-
-    # Table outer border
-    table_bottom = current_y + 11
-    pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
-    pdf.setLineWidth(0.8)
-    pdf.rect(40, table_bottom, 515, (table_top - table_bottom), fill=False, stroke=True)
-
-    # Vertical Column Divider Lines
-    v_dividers = [70, 95, 290, 340, 395, 435, 495]
-    pdf.setStrokeColorRGB(0.88, 0.89, 0.92)
-    pdf.setLineWidth(0.5)
-    for vx in v_dividers:
-        pdf.line(vx, table_top, vx, table_bottom)
-
-    # Summary Section
-    summary_y = table_bottom - 16
-    if note and note.strip():
-        pdf.setFont("Helvetica-Bold", 8.5)
-        pdf.setFillColorRGB(0.2, 0.2, 0.2)
-        pdf.drawString(45, summary_y - 2, f"Note / Remarks: {note.strip()}")
-
-    total_box_width = 190
-    total_box_height = 30
-    total_box_x = 365
-    total_box_y = summary_y - total_box_height + 10
-
-    pdf.setFillColorRGB(0.94, 0.96, 1.0)
-    pdf.rect(total_box_x, total_box_y, total_box_width, total_box_height, fill=True, stroke=False)
-    pdf.setStrokeColorRGB(0.2, 0.35, 0.65)
-    pdf.setLineWidth(1)
-    pdf.rect(total_box_x, total_box_y, total_box_width, total_box_height, fill=False, stroke=True)
-
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.setFillColorRGB(0.1, 0.2, 0.5)
-    pdf.drawRightString(total_box_x + total_box_width - 10, total_box_y + 9, f"Grand Total:  Rs. {grand_total:,.2f}")
-
-    # Mandatory Footer
-    footer_line_y = total_box_y - 12
-    footer_text_y = footer_line_y - 12
-
-    pdf.setStrokeColorRGB(0.85, 0.88, 0.92)
-    pdf.setLineWidth(0.5)
-    pdf.line(40, footer_line_y, 555, footer_line_y)
-
-    pdf.setFont("Helvetica", 8)
-    pdf.setFillColorRGB(0.35, 0.35, 0.35)
-    pdf.drawString(40, footer_text_y, "GST as per applicable. Order against PO.")
-
-    pdf.setFont("Helvetica-Bold", 8)
-    pdf.setFillColorRGB(0.35, 0.35, 0.35)
-    pdf.drawRightString(555, footer_text_y, "⚡ Powered by wokdens.com")
-
-    pdf.save()
-
-    if open_file:
-        open_pdf_file(path)
-
-    return path
 
 
     def on_paid_changed(self, event=None):
