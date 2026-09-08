@@ -57,62 +57,69 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
     GS = b'\x1d'
     INIT = ESC + b'@'
     FONT_A = ESC + b'M\x00'
-    FONT_B = ESC + b'M\x01'
     ALIGN_LEFT = ESC + b'a\x00'
     ALIGN_CENTER = ESC + b'a\x01'
     ALIGN_RIGHT = ESC + b'a\x02'
     BOLD_ON = ESC + b'E\x01'
     BOLD_OFF = ESC + b'E\x00'
-    FEED_CUT = b'\n\n\n\n' + GS + b'V\x41\x00'
+    FEED_CUT = b'\n\n' + GS + b'V\x42\x00'
 
     out = bytearray()
     out.extend(INIT)
+    out.extend(FONT_A)
     out.extend(ALIGN_CENTER + BOLD_ON + b'ESTIMATE ONLY\n' + BOLD_OFF)
-    out.extend(FONT_A + f'Date: {d_str}\n'.encode('ascii', 'replace'))
+    out.extend(f'Date: {d_str}\n'.encode('ascii', 'replace'))
     out.extend(ALIGN_LEFT)
-    out.extend(f'Est No  : INV-{clean_num}\n'.encode('ascii', 'replace'))
-    out.extend(f'Customer: {customer_name.upper()}\n'.encode('ascii', 'replace'))
-    out.extend(FONT_B)
-    out.extend(b'=' * 64 + b'\n')
+    out.extend(f'Est No   : INV-{clean_num}\n'.encode('ascii', 'replace'))
+    out.extend(BOLD_ON + f'Customer : {customer_name.upper()}\n'.encode('ascii', 'replace') + BOLD_OFF)
+    out.extend(b'=' * 48 + b'\n')
 
-    # 8 Columns (64 Chars Font B)
-    # S.N(3) + Qty(4) + Product Description(22) + MRP(6) + Price(7) + Unit(4) + Disc(5) + Total(8) + 5 spaces = 64
-    h_sno = "S.N"
-    h_qty = "Qty"
-    h_desc = "Product Description"
-    h_mrp = "MRP"
-    h_price = "Price"
-    h_unit = "Unit"
-    h_disc = "Disc"
-    h_tot = "Total"
-    header_line = f"{h_sno:>3} {h_qty:>4} {h_desc:<22} {h_mrp:>6} {h_price:>7} {h_unit:^4} {h_disc:>5} {h_tot:>8}\n"
-    out.extend(BOLD_ON + header_line.encode('ascii', 'replace') + BOLD_OFF)
-    out.extend(b'-' * 64 + b'\n')
+    # Header: 48 Chars Font A
+    out.extend(BOLD_ON + f"{'Item Description & Pricing Details':<38}{'Amount':>10}\n".encode('ascii', 'replace') + BOLD_OFF)
+    out.extend(b'-' * 48 + b'\n')
+
     serial = 1
     total_qty = 0
     for it in items:
         qty = it.get('quantity', 0)
         total_qty += qty
-        name = str(it.get('name', ''))[:22]
+        name = str(it.get('name', ''))[:44]
         mrp = float(it.get('mrp', 0) or 0)
-        mrp_str = f"{mrp:,.0f}" if mrp > 0 else "-"
         price = float(it.get('price', 0) or 0)
-        price_str = f"{price:,.2f}"
-        unit = str(it.get('unit', 'Pcs') or 'Pcs')[:4]
+        unit = str(it.get('unit', 'Pcs') or 'Pcs').strip()
         disc = float(it.get('discount', 0) or 0)
-        disc_str = f"{int(disc) if disc.is_integer() else disc}%" if disc > 0 else "-"
         tot = float(it.get('total', 0) or 0)
         tot_str = f"{tot:,.2f}"
-        row_str = f"{serial:>3} {qty:>4} {name:<22} {mrp_str:>6} {price_str:>7} {unit:^4} {disc_str:>5} {tot_str:>8}\n"
-        out.extend(row_str.encode('ascii', 'replace'))
+
+        # Line 1: Item Name in Bold
+        out.extend(BOLD_ON + f"{serial}. {name}\n".encode('ascii', 'replace') + BOLD_OFF)
+
+        # Line 2: Details & Tags
+        unit_str = f" {unit}" if unit else " pcs"
+        left_sub = f"   {qty}{unit_str} x Rs.{price:,.2f}"
+
+        extra_tags = []
+        if mrp > 0:
+            extra_tags.append(f"MRP: {mrp:,.0f}")
+        if disc > 0:
+            disc_tag = f"{int(disc) if disc.is_integer() else disc}%"
+            extra_tags.append(f"Disc: {disc_tag}")
+
+        if extra_tags:
+            left_sub += f" ({' | '.join(extra_tags)})"
+
+        if len(left_sub) > 36:
+            left_sub = left_sub[:36]
+
+        out.extend(f"{left_sub:<36}{tot_str:>12}\n".encode('ascii', 'replace'))
         serial += 1
-    out.extend(b'=' * 64 + b'\n')
-    out.extend(FONT_A)
-    out.extend(f"Total Items: {len(items)}  |  Total Qty: {total_qty}\n".encode('ascii', 'replace'))
+
+    out.extend(b'=' * 48 + b'\n')
+    out.extend(f"Total Items: {len(items)}   |   Total Qty: {total_qty}\n".encode('ascii', 'replace'))
     out.extend(ALIGN_RIGHT + BOLD_ON + f"GRAND TOTAL: Rs. {grand_total:,.2f}\n".encode('ascii', 'replace') + BOLD_OFF)
     if note and note.strip():
         out.extend(ALIGN_LEFT + f"Note: {note.strip()}\n".encode('ascii', 'replace'))
-    out.extend(ALIGN_CENTER + FONT_A + b'------------------------------------------------\n')
+    out.extend(ALIGN_CENTER + b'------------------------------------------------\n')
     out.extend(b'GST as per applicable. Order against PO.\n')
     out.extend(BOLD_ON + b'Powered by wokdens.com\n' + BOLD_OFF)
     out.extend(FEED_CUT)
