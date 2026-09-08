@@ -237,12 +237,12 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
 
         out.extend(f"{left_sub:<36}{tot_str:>12}\n".encode('ascii', 'replace'))
         if serial < len(normalized_items):
-            out.extend(b'\x1bJ\x12')  # ~2.2mm clean spacing between items
+            out.extend(b'\x1bJ\x24')  # ~4.5mm clear separation between items
         serial += 1
 
     out.extend(b'=' * 48 + b'\n')
     out.extend(f"Total Items: {len(normalized_items)}   |   Total Qty: {total_qty}\n".encode('ascii', 'replace'))
-    out.extend(b'\x1bJ\x12')  # Clean breathing gap before Grand Total
+    out.extend(b'\x1bJ\x18')  # Clean breathing gap before Grand Total
     out.extend(ALIGN_RIGHT + BOLD_ON + f"GRAND TOTAL: Rs. {grand_total:,.2f}\n".encode('ascii', 'replace') + BOLD_OFF)
     
     # Grand Total in Words

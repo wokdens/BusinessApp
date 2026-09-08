@@ -116,7 +116,7 @@ def generate_thermal_receipt_pdf(
     # Calculate dynamic height based on 2-line item rows and note
     header_h = 65
     table_header_h = 16
-    item_row_h = 28  # 2 lines per item with breathing gap
+    item_row_h = 32  # 2 lines per item with comfortable breathing gap
     items_h = len(normalized_items) * item_row_h
 
     summary_h = 60
@@ -204,11 +204,11 @@ def generate_thermal_receipt_pdf(
         pdf.setFont("Helvetica-Bold", 7.5)
         pdf.drawRightString(table_right, curr_y, f"{total_val:,.2f}")
 
-        # Add vertical breathing gap between items
-        curr_y -= 5
+        # Add comfortable vertical breathing gap between items
+        curr_y -= 8
         serial += 1
 
-    curr_y -= 3
+    curr_y -= 2
     pdf.setLineWidth(0.8)
     pdf.line(table_left, curr_y, table_right, curr_y)
 
