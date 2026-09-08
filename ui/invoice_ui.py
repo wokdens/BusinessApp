@@ -1634,7 +1634,7 @@ class InvoiceUI:
             grand_total=grand_total,
             paid_amount=paid_amount,
             note=note,
-            open_file=(format_type == "thermal")
+            open_file=False
         )
 
         # 2. A4 Standard / Compact PDF (for WhatsApp sharing and standard printers)
@@ -1647,6 +1647,29 @@ class InvoiceUI:
             note=note,
             open_file=(format_type == "a4")
         )
+
+        printed_direct = False
+        direct_msg = ""
+        if format_type == "thermal":
+            from ui.thermal_printer import print_receipt_direct, find_thermal_printer
+            t_printer = find_thermal_printer()
+            if t_printer:
+                ok, msg = print_receipt_direct(
+                    invoice_number=invoice_id,
+                    customer_name=customer_name,
+                    items=self.cart_items,
+                    grand_total=grand_total,
+                    paid_amount=paid_amount,
+                    note=note,
+                    printer_name=t_printer
+                )
+                if ok:
+                    printed_direct = True
+                    direct_msg = f"\n• Printed directly to POS thermal printer ({t_printer})."
+                else:
+                    open_pdf_file(thermal_path)
+            else:
+                open_pdf_file(thermal_path)
 
         # Clear cart and reset form for the next customer
         self.cart_items = []
@@ -1663,7 +1686,7 @@ class InvoiceUI:
         messagebox.showinfo(
             "Success",
             f"Invoice #{invoice_id} saved successfully!\n\n"
-            f"• Generated: {format_label}\n"
+            f"• Generated: {format_label}{direct_msg}\n"
             f"• Both 80mm Thermal & A4 formats are stored and ready.",
             parent=self.frame.winfo_toplevel()
         )

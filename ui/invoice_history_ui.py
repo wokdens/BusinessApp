@@ -454,6 +454,27 @@ class InvoiceHistoryUI:
         ).strip().replace(" ", "_")
 
         if format_type == "thermal":
+            from ui.thermal_printer import print_receipt_direct, find_thermal_printer
+            t_printer = find_thermal_printer()
+            if t_printer:
+                ok, msg = print_receipt_direct(
+                    invoice_number=inv_number,
+                    customer_name=customer_name,
+                    items=items,
+                    grand_total=total,
+                    paid_amount=paid,
+                    note=note,
+                    date_str=date_str,
+                    printer_name=t_printer
+                )
+                if ok:
+                    messagebox.showinfo(
+                        "Thermal Print Sent",
+                        f"Receipt for INV-{inv_number} printed directly to '{t_printer}'.",
+                        parent=self.frame.winfo_toplevel()
+                    )
+                    return
+
             thermal_filename = f"INV-{inv_number}_{safe_name}_80mm.pdf" if safe_name else f"INV-{inv_number}_80mm.pdf"
             thermal_path = os.path.join(INVOICES_DIR, thermal_filename)
             if os.path.exists(thermal_path):
