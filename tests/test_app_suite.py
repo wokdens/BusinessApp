@@ -25,7 +25,9 @@ def run_tests():
     with patch('tkinter.messagebox.showinfo') as mock_info, \
          patch('tkinter.messagebox.showerror') as mock_error, \
          patch('tkinter.messagebox.showwarning') as mock_warning, \
-         patch('ui.invoice_ui.open_pdf_file') as mock_open_pdf:
+         patch('ui.invoice_ui.open_pdf_file') as mock_open_pdf, \
+         patch('ui.thermal_printer.print_receipt_direct', return_value=(True, "Mock print OK")) as mock_print_direct, \
+         patch('ui.thermal_printer.send_raw_to_printer', return_value=(True, "Mock raw OK")) as mock_raw_print:
 
         # Step 1: Initialize MainWindow
         print('[TEST 1] Initializing MainWindow...')
