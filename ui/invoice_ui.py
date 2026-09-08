@@ -116,10 +116,10 @@ def generate_thermal_receipt_pdf(
     # Calculate dynamic height based on 2-line item rows and note
     header_h = 65
     table_header_h = 16
-    item_row_h = 24  # 2 lines per item
+    item_row_h = 28  # 2 lines per item with breathing gap
     items_h = len(normalized_items) * item_row_h
 
-    summary_h = 45
+    summary_h = 50
     note_lines = textwrap.wrap(note.strip(), width=36) if note and note.strip() else []
     if note_lines:
         summary_h += len(note_lines) * 9 + 8
@@ -204,9 +204,11 @@ def generate_thermal_receipt_pdf(
         pdf.setFont("Helvetica-Bold", 7.5)
         pdf.drawRightString(table_right, curr_y, f"{total_val:,.2f}")
 
+        # Add vertical breathing gap between items
+        curr_y -= 5
         serial += 1
 
-    curr_y -= 6
+    curr_y -= 3
     pdf.setLineWidth(0.8)
     pdf.line(table_left, curr_y, table_right, curr_y)
 
@@ -219,7 +221,7 @@ def generate_thermal_receipt_pdf(
     pdf.setFillColorRGB(0, 0, 0)
     pdf.drawString(table_left, curr_y, f"Total Items: {len(normalized_items)}   |   Total Qty: {int(total_qty) if total_qty.is_integer() else total_qty}")
 
-    curr_y -= 13
+    curr_y -= 16  # Clean breathing gap before Grand Total
     pdf.setFont("Helvetica-Bold", 9.5)
     pdf.drawRightString(table_right, curr_y, f"GRAND TOTAL: Rs. {grand_total:,.2f}")
 
