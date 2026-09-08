@@ -138,6 +138,9 @@ def generate_thermal_receipt_pdf(
 
     # Header
     curr_y = total_height - 16
+    pdf.setFillColorRGB(0, 0, 0)
+    pdf.setStrokeColorRGB(0, 0, 0)
+
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawCentredString(width / 2, curr_y, "ESTIMATE ONLY")
 
@@ -155,7 +158,7 @@ def generate_thermal_receipt_pdf(
 
     curr_y -= 5
     pdf.setDash(1.5, 1.5)
-    pdf.setLineWidth(0.5)
+    pdf.setLineWidth(0.6)
     pdf.line(table_left, curr_y, table_right, curr_y)
     pdf.setDash()
 
@@ -166,14 +169,12 @@ def generate_thermal_receipt_pdf(
     table_top = curr_y
     header_box_h = 14
 
-    pdf.setFillColorRGB(0.93, 0.94, 0.97)
-    pdf.rect(table_left, table_top - header_box_h, table_w, header_box_h, fill=True, stroke=False)
-    pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
-    pdf.setLineWidth(0.6)
+    pdf.setStrokeColorRGB(0, 0, 0)
+    pdf.setLineWidth(0.7)
     pdf.rect(table_left, table_top - header_box_h, table_w, header_box_h, fill=False, stroke=True)
 
     pdf.setFont("Helvetica-Bold", 5.8)
-    pdf.setFillColorRGB(0.15, 0.18, 0.25)
+    pdf.setFillColorRGB(0, 0, 0)
     hy = table_top - 9.5
 
     # 8 Columns: S.No, Qty, Product Description, MRP, Price, Unit, Discount, Total (Rs.)
@@ -201,11 +202,7 @@ def generate_thermal_receipt_pdf(
         row_top = curr_y
         row_bottom = curr_y - row_h
 
-        if serial % 2 == 0:
-            pdf.setFillColorRGB(0.98, 0.98, 0.99)
-            pdf.rect(table_left, row_bottom, table_w, row_h, fill=True, stroke=False)
-
-        pdf.setFillColorRGB(0.12, 0.12, 0.12)
+        pdf.setFillColorRGB(0, 0, 0)
         text_y = row_top - 9
 
         # 1. S.No
@@ -253,7 +250,7 @@ def generate_thermal_receipt_pdf(
         pdf.drawRightString(220.0, text_y, f"{total_val:,.2f}")
 
         # Row divider line
-        pdf.setStrokeColorRGB(0.9, 0.91, 0.94)
+        pdf.setStrokeColorRGB(0, 0, 0)
         pdf.setLineWidth(0.4)
         pdf.line(table_left, row_bottom, table_right, row_bottom)
 
@@ -262,12 +259,11 @@ def generate_thermal_receipt_pdf(
 
     # Outer table border
     table_bottom = curr_y
-    pdf.setStrokeColorRGB(0.75, 0.78, 0.84)
-    pdf.setLineWidth(0.6)
+    pdf.setStrokeColorRGB(0, 0, 0)
+    pdf.setLineWidth(0.7)
     pdf.rect(table_left, table_bottom, table_w, table_top - table_bottom, fill=False, stroke=True)
 
     # Full table vertical dividers
-    pdf.setStrokeColorRGB(0.88, 0.89, 0.92)
     pdf.setLineWidth(0.4)
     for vx in v_divs:
         pdf.line(vx, table_top, vx, table_bottom)
@@ -278,18 +274,18 @@ def generate_thermal_receipt_pdf(
     curr_y = table_bottom - 11
     total_qty = sum(float(it.get("quantity", 0)) for it in normalized_items)
     pdf.setFont("Helvetica", 6.8)
-    pdf.setFillColorRGB(0.2, 0.2, 0.2)
+    pdf.setFillColorRGB(0, 0, 0)
     pdf.drawString(table_left, curr_y, f"Total Items: {len(normalized_items)} (Qty: {int(total_qty) if total_qty.is_integer() else total_qty})")
 
     curr_y -= 13
     pdf.setFont("Helvetica-Bold", 9.5)
-    pdf.setFillColorRGB(0.1, 0.2, 0.5)
+    pdf.setFillColorRGB(0, 0, 0)
     pdf.drawRightString(table_right, curr_y, f"GRAND TOTAL: Rs. {grand_total:,.2f}")
 
     if note_lines:
         curr_y -= 11
         pdf.setFont("Helvetica-Bold", 6.8)
-        pdf.setFillColorRGB(0.2, 0.2, 0.2)
+        pdf.setFillColorRGB(0, 0, 0)
         pdf.drawString(table_left, curr_y, "Note: " + note_lines[0])
         for nl in note_lines[1:]:
             curr_y -= 8.5
@@ -306,7 +302,7 @@ def generate_thermal_receipt_pdf(
     # =====================================
     curr_y -= 10
     pdf.setFont("Helvetica", 6.5)
-    pdf.setFillColorRGB(0.35, 0.35, 0.35)
+    pdf.setFillColorRGB(0, 0, 0)
     pdf.drawCentredString(width / 2, curr_y, "GST as per applicable. Order against PO.")
 
     curr_y -= 9
