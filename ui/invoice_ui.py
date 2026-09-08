@@ -119,7 +119,7 @@ def generate_thermal_receipt_pdf(
     item_row_h = 28  # 2 lines per item with breathing gap
     items_h = len(normalized_items) * item_row_h
 
-    summary_h = 50
+    summary_h = 60
     note_lines = textwrap.wrap(note.strip(), width=36) if note and note.strip() else []
     if note_lines:
         summary_h += len(note_lines) * 9 + 8
@@ -224,6 +224,16 @@ def generate_thermal_receipt_pdf(
     curr_y -= 16  # Clean breathing gap before Grand Total
     pdf.setFont("Helvetica-Bold", 9.5)
     pdf.drawRightString(table_right, curr_y, f"GRAND TOTAL: Rs. {grand_total:,.2f}")
+
+    from ui.thermal_printer import amount_to_indian_words
+    words = amount_to_indian_words(grand_total)
+    if words:
+        curr_y -= 10
+        pdf.setFont("Helvetica-Oblique", 6.0)
+        w_lines = textwrap.wrap(f"({words})", width=40)
+        for wl in w_lines:
+            pdf.drawRightString(table_right, curr_y, wl)
+            curr_y -= 7.5
 
     if note_lines:
         curr_y -= 11

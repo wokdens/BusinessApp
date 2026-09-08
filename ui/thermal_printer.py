@@ -50,6 +50,128 @@ def find_thermal_printer():
                 return p
     return None
 
+def _normalize_items(raw_items):
+    """Normalizes both dict-based cart items and tuple-based database items into uniform dicts"""
+    normalized = []
+    for it in raw_items:
+        if isinstance(it, dict):
+            normalized.append({
+                "name": str(it.get("name", "")),
+                "quantity": it.get("quantity", 0),
+                "price": float(it.get("price", 0) or 0),
+                "mrp": float(it.get("mrp", 0) or 0),
+                "unit": str(it.get("unit", "Pcs") or "Pcs"),
+                "discount": float(it.get("discount", 0) or 0),
+                "discount_base": str(it.get("discount_base", "Price") or "Price"),
+                "total": float(it.get("total", 0) or 0)
+            })
+        elif isinstance(it, (list, tuple)):
+            if len(it) == 7:
+                qty, name, price, unit, disc, disc_base, tot = it
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "price": float(price or 0),
+                    "mrp": 0.0,
+                    "unit": str(unit or "Pcs"),
+                    "discount": float(disc or 0),
+                    "discount_base": str(disc_base or "Price"),
+                    "total": float(tot or 0)
+                })
+            elif len(it) >= 8:
+                qty, name, mrp, price, unit, disc, disc_base, tot = it[:8]
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "mrp": float(mrp or 0),
+                    "price": float(price or 0),
+                    "unit": str(unit or "Pcs"),
+                    "discount": float(disc or 0),
+                    "discount_base": str(disc_base or "Price"),
+                    "total": float(tot or 0)
+                })
+            elif len(it) >= 3:
+                # Minimal fallback: (qty, name, price, ...)
+                qty = it[0]
+                name = it[1]
+                price = it[2]
+                tot = it[3] if len(it) > 3 else (qty * price)
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "mrp": 0.0,
+                    "price": float(price or 0),
+                    "unit": "Pcs",
+                    "discount": 0.0,
+                    "discount_base": "Price",
+                    "total": float(tot or 0)
+                })
+    return normalized
+
+def amount_to_indian_words(num):
+    """Converts a numerical amount into Indian currency words."""
+    try:
+        val = float(num)
+    except (ValueError, TypeError):
+        return ""
+    if val == 0:
+        return "Rupees Zero Only"
+    is_negative = val < 0
+    val = abs(val)
+    rupees = int(val)
+    paise = int(round((val - rupees) * 100))
+    if paise == 100:
+        rupees += 1
+        paise = 0
+    ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+            "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+            "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+    def two_digits(n):
+        if n == 0:
+            return ""
+        elif n < 20:
+            return ones[n]
+        else:
+            t = tens[n // 10]
+            o = ones[n % 10]
+            return f"{t} {o}".strip()
+    def three_digits(n):
+        h = n // 100
+        r = n % 100
+        res = []
+        if h > 0:
+            res.append(f"{ones[h]} Hundred")
+        if r > 0:
+            res.append(two_digits(r))
+        return " ".join(res).strip()
+    crore = rupees // 10000000
+    rupees %= 10000000
+    lakh = rupees // 100000
+    rupees %= 100000
+    thousand = rupees // 1000
+    rupees %= 1000
+    hundreds = rupees
+    parts = []
+    if crore > 0:
+        parts.append(f"{two_digits(crore)} Crore")
+    if lakh > 0:
+        parts.append(f"{two_digits(lakh)} Lakh")
+    if thousand > 0:
+        parts.append(f"{two_digits(thousand)} Thousand")
+    if hundreds > 0:
+        parts.append(three_digits(hundreds))
+    rupees_str = " ".join(parts).strip()
+    if not rupees_str:
+        rupees_str = "Zero"
+    words = f"Rupees {rupees_str}"
+    if is_negative:
+        words = f"Minus {words}"
+    if paise > 0:
+        words += f" and {two_digits(paise)} Paise"
+    words += " Only"
+    return words
+
 def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, paid_amount=0, note='', date_str=None):
     clean_num = str(invoice_number).replace('INV-', '').strip()
     d_str = date_str or datetime.now().strftime('%d-%m-%Y  %I:%M %p')
@@ -63,6 +185,8 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
     BOLD_ON = ESC + b'E\x01'
     BOLD_OFF = ESC + b'E\x00'
     FEED_CUT = b'\n\n' + GS + b'V\x42\x00'
+
+    normalized_items = _normalize_items(items)
 
     out = bytearray()
     out.extend(INIT)
@@ -80,7 +204,7 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
 
     serial = 1
     total_qty = 0
-    for it in items:
+    for it in normalized_items:
         qty = it.get('quantity', 0)
         total_qty += qty
         name = str(it.get('name', ''))[:44]
@@ -112,14 +236,23 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
             left_sub = left_sub[:36]
 
         out.extend(f"{left_sub:<36}{tot_str:>12}\n".encode('ascii', 'replace'))
-        if serial < len(items):
+        if serial < len(normalized_items):
             out.extend(b'\x1bJ\x12')  # ~2.2mm clean spacing between items
         serial += 1
 
     out.extend(b'=' * 48 + b'\n')
-    out.extend(f"Total Items: {len(items)}   |   Total Qty: {total_qty}\n".encode('ascii', 'replace'))
+    out.extend(f"Total Items: {len(normalized_items)}   |   Total Qty: {total_qty}\n".encode('ascii', 'replace'))
     out.extend(b'\x1bJ\x12')  # Clean breathing gap before Grand Total
     out.extend(ALIGN_RIGHT + BOLD_ON + f"GRAND TOTAL: Rs. {grand_total:,.2f}\n".encode('ascii', 'replace') + BOLD_OFF)
+    
+    # Grand Total in Words
+    words = amount_to_indian_words(grand_total)
+    if words:
+        import textwrap
+        wrapped_words = textwrap.wrap(f"({words})", width=46)
+        for w_line in wrapped_words:
+            out.extend(ALIGN_RIGHT + f"{w_line}\n".encode('ascii', 'replace'))
+
     if note and note.strip():
         out.extend(ALIGN_LEFT + f"Note: {note.strip()}\n".encode('ascii', 'replace'))
     out.extend(ALIGN_CENTER + b'------------------------------------------------\n')
