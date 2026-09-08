@@ -165,6 +165,49 @@ def run_tests():
         dash_tab = app.current_ui
         print('Dashboard tab refreshed successfully.')
 
+        # Step 7: Test Indian Mobile Number Validation
+        print('[TEST 7] Testing Indian Mobile Number Validation...')
+        from ui.customer_popup import validate_and_normalize_indian_mobile, CustomerPopup
+
+        # Valid Indian mobile test cases
+        assert validate_and_normalize_indian_mobile('9876543210') == (True, '9876543210')
+        assert validate_and_normalize_indian_mobile('09876543210') == (True, '9876543210')
+        assert validate_and_normalize_indian_mobile('+91-9876543210') == (True, '9876543210')
+        assert validate_and_normalize_indian_mobile('+91 98765 43210') == (True, '9876543210')
+        assert validate_and_normalize_indian_mobile('+91-61234-56789') == (True, '6123456789')
+        assert validate_and_normalize_indian_mobile('7000000000') == (True, '7000000000')
+        assert validate_and_normalize_indian_mobile('8123456789') == (True, '8123456789')
+
+        # Invalid test cases
+        assert validate_and_normalize_indian_mobile('5123456789')[0] is False  # Must start with 6-9
+        assert validate_and_normalize_indian_mobile('1234567890')[0] is False  # Landline / invalid
+        assert validate_and_normalize_indian_mobile('987654321')[0] is False   # Less than 10 digits
+        assert validate_and_normalize_indian_mobile('987654321012')[0] is False # Exceeds 10 digits
+        assert validate_and_normalize_indian_mobile('+1-9876543210')[0] is False # Non-Indian country code
+        assert validate_and_normalize_indian_mobile('')[0] is False
+        assert validate_and_normalize_indian_mobile('abcdefghij')[0] is False
+
+        # Test CustomerPopup save
+        import time
+        uniq_phone = f"9876{int(time.time()) % 1000000:06d}"
+        cb_called = []
+        popup = CustomerPopup(root, lambda: cb_called.append(True))
+        popup.name_entry.insert(0, 'Test Auto Customer Valid')
+        popup.phone_entry.insert(0, f"+91-{uniq_phone}")
+        popup.address_text.insert('1.0', '123 Market Road')
+        popup.save_customer()
+        assert len(cb_called) == 1, 'Customer callback not fired!'
+
+        # Test duplicate phone rejection
+        popup2 = CustomerPopup(root, lambda: None)
+        popup2.name_entry.insert(0, 'Duplicate Phone User')
+        popup2.phone_entry.insert(0, uniq_phone)
+        popup2.save_customer()
+        assert mock_warning.called, 'Duplicate phone warning was not shown!'
+        popup2.window.destroy()
+
+        print('CustomerPopup Indian mobile validation and duplicate detection tested OK.')
+
     root.destroy()
     print('=' * 60)
     print('ALL TESTS PASSED WITH ZERO ERRORS!')
