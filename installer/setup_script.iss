@@ -44,7 +44,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\dist\BusinessApp\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\certificates\wokdens_codesign.cer"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\certificates\wokdens_codesign.cer"; DestDir: "{app}\certificates"; Flags: ignoreversion
+Source: "..\scripts\install_certificate.bat"; DestDir: "{app}"; DestName: "Register_Security_Certificate.bat"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -52,5 +53,9 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Auto-register certificate into Current User Trusted Publishers store silently
+Filename: "certutil.exe"; Parameters: "-user -addstore -f ""TrustedPublisher"" ""{app}\certificates\wokdens_codesign.cer"""; Flags: runhidden waituntilterminated
+; Launch application option
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
 
