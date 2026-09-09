@@ -61,6 +61,7 @@ def _normalize_items(raw_items):
                 "price": float(it.get("price", 0) or 0),
                 "mrp": float(it.get("mrp", 0) or 0),
                 "unit": str(it.get("unit", "Pcs") or "Pcs"),
+                "increase": float(it.get("increase", 0) or 0),
                 "discount": float(it.get("discount", 0) or 0),
                 "discount_base": str(it.get("discount_base", "Price") or "Price"),
                 "total": float(it.get("total", 0) or 0)
@@ -74,11 +75,12 @@ def _normalize_items(raw_items):
                     "price": float(price or 0),
                     "mrp": 0.0,
                     "unit": str(unit or "Pcs"),
+                    "increase": 0.0,
                     "discount": float(disc or 0),
                     "discount_base": str(disc_base or "Price"),
                     "total": float(tot or 0)
                 })
-            elif len(it) >= 8:
+            elif len(it) == 8:
                 qty, name, mrp, price, unit, disc, disc_base, tot = it[:8]
                 normalized.append({
                     "name": str(name),
@@ -86,6 +88,20 @@ def _normalize_items(raw_items):
                     "mrp": float(mrp or 0),
                     "price": float(price or 0),
                     "unit": str(unit or "Pcs"),
+                    "increase": 0.0,
+                    "discount": float(disc or 0),
+                    "discount_base": str(disc_base or "Price"),
+                    "total": float(tot or 0)
+                })
+            elif len(it) >= 9:
+                qty, name, mrp, price, unit, disc, disc_base, tot, inc = it[:9]
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "mrp": float(mrp or 0),
+                    "price": float(price or 0),
+                    "unit": str(unit or "Pcs"),
+                    "increase": float(inc or 0),
                     "discount": float(disc or 0),
                     "discount_base": str(disc_base or "Price"),
                     "total": float(tot or 0)
@@ -211,6 +227,7 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
         mrp = float(it.get('mrp', 0) or 0)
         price = float(it.get('price', 0) or 0)
         unit = str(it.get('unit', 'Pcs') or 'Pcs').strip()
+        inc = float(it.get('increase', 0) or 0)
         disc = float(it.get('discount', 0) or 0)
         tot = float(it.get('total', 0) or 0)
         tot_str = f"{tot:,.2f}"
@@ -225,9 +242,12 @@ def format_esc_pos_receipt(invoice_number, customer_name, items, grand_total, pa
         extra_tags = []
         if mrp > 0:
             extra_tags.append(f"MRP: {mrp:,.0f}")
+        if inc > 0:
+            inc_tag = f"{int(inc) if inc.is_integer() else inc}%"
+            extra_tags.append(f"Inc: +{inc_tag}")
         if disc > 0:
             disc_tag = f"{int(disc) if disc.is_integer() else disc}%"
-            extra_tags.append(f"Disc: {disc_tag}")
+            extra_tags.append(f"Disc: -{disc_tag}")
 
         if extra_tags:
             left_sub += f" ({' | '.join(extra_tags)})"

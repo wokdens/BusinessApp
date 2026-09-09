@@ -36,6 +36,7 @@ def _normalize_items(raw_items):
                 "price": float(it.get("price", 0) or 0),
                 "mrp": float(it.get("mrp", 0) or 0),
                 "unit": str(it.get("unit", "Pcs") or "Pcs"),
+                "increase": float(it.get("increase", 0) or 0),
                 "discount": float(it.get("discount", 0) or 0),
                 "discount_base": str(it.get("discount_base", "Price") or "Price"),
                 "total": float(it.get("total", 0) or 0)
@@ -49,11 +50,12 @@ def _normalize_items(raw_items):
                     "price": float(price or 0),
                     "mrp": 0.0,
                     "unit": str(unit or "Pcs"),
+                    "increase": 0.0,
                     "discount": float(disc or 0),
                     "discount_base": str(disc_base or "Price"),
                     "total": float(tot or 0)
                 })
-            elif len(it) >= 8:
+            elif len(it) == 8:
                 qty, name, mrp, price, unit, disc, disc_base, tot = it[:8]
                 normalized.append({
                     "name": str(name),
@@ -61,6 +63,20 @@ def _normalize_items(raw_items):
                     "price": float(price or 0),
                     "mrp": float(mrp or 0),
                     "unit": str(unit or "Pcs"),
+                    "increase": 0.0,
+                    "discount": float(disc or 0),
+                    "discount_base": str(disc_base or "Price"),
+                    "total": float(tot or 0)
+                })
+            elif len(it) >= 9:
+                qty, name, mrp, price, unit, disc, disc_base, tot, inc = it[:9]
+                normalized.append({
+                    "name": str(name),
+                    "quantity": qty,
+                    "price": float(price or 0),
+                    "mrp": float(mrp or 0),
+                    "unit": str(unit or "Pcs"),
+                    "increase": float(inc or 0),
                     "discount": float(disc or 0),
                     "discount_base": str(disc_base or "Price"),
                     "total": float(tot or 0)
@@ -185,6 +201,7 @@ def generate_thermal_receipt_pdf(
         unit = str(it.get("unit", "Pcs") or "Pcs").strip()
         unit_str = f" {unit}" if unit else " pcs"
         mrp = float(it.get("mrp", 0) or 0)
+        inc = float(it.get("increase", 0) or 0)
         disc = float(it.get("discount", 0) or 0)
         total_val = float(it.get("total", 0) or 0)
 
@@ -192,9 +209,12 @@ def generate_thermal_receipt_pdf(
         tags = []
         if mrp > 0:
             tags.append(f"MRP: {mrp:,.0f}")
+        if inc > 0:
+            inc_str = f"{int(inc) if inc.is_integer() else inc}%"
+            tags.append(f"Inc: +{inc_str}")
         if disc > 0:
             disc_str = f"{int(disc) if disc.is_integer() else disc}%"
-            tags.append(f"Disc: {disc_str}")
+            tags.append(f"Disc: -{disc_str}")
         if tags:
             left_detail += f" ({' | '.join(tags)})"
 
@@ -334,13 +354,14 @@ def generate_a4_invoice_pdf(
     pdf.rect(40, table_top - header_height, 515, header_height, fill=False, stroke=True)
 
     headers = [
-        ("S.No", 55, "center"),
-        ("Qty", 82, "center"),
-        ("Product Description", 110, "left"),
-        ("MRP", 330, "right"),
-        ("Price", 380, "right"),
-        ("Unit", 415, "center"),
-        ("Discount", 465, "center"),
+        ("S.No", 53, "center"),
+        ("Qty", 79, "center"),
+        ("Product Description", 98, "left"),
+        ("MRP", 314, "right"),
+        ("Price", 358, "right"),
+        ("Unit", 378, "center"),
+        ("Inc %", 415, "center"),
+        ("Disc %", 465, "center"),
         ("Total (Rs.)", 548, "right")
     ]
 
@@ -362,7 +383,7 @@ def generate_a4_invoice_pdf(
     serial = 1
 
     for item in normalized_items:
-        wrapped_product = textwrap.wrap(item["name"], width=32) or ["Item"]
+        wrapped_product = textwrap.wrap(item["name"], width=28) or ["Item"]
         lines_count = len(wrapped_product)
         row_height = 16 if lines_count <= 1 else (lines_count * 11 + 5)
 
@@ -379,40 +400,45 @@ def generate_a4_invoice_pdf(
         pdf.setFillColorRGB(0.15, 0.15, 0.15)
 
         # 1. S.No
-        pdf.drawCentredString(55, current_y, str(serial))
+        pdf.drawCentredString(53, current_y, str(serial))
 
         # 2. Qty
         pdf.setFont("Helvetica-Bold", 8.5)
-        pdf.drawCentredString(82, current_y, str(item["quantity"]))
+        pdf.drawCentredString(79, current_y, str(item["quantity"]))
         pdf.setFont("Helvetica", 8.5)
 
         # 3. Product Description
         yy = current_y
         for line in wrapped_product:
-            pdf.drawString(110, yy, line)
+            pdf.drawString(98, yy, line)
             yy -= 11
 
         # 4. MRP
         mrp_val = float(item.get("mrp", 0))
-        pdf.drawRightString(330, current_y, f"{mrp_val:,.1f}" if mrp_val > 0 else "-")
+        pdf.drawRightString(314, current_y, f"{mrp_val:,.1f}" if mrp_val > 0 else "-")
 
         # 5. Price
         price_val = float(item.get("price", 0))
-        pdf.drawRightString(380, current_y, f"{price_val:,.2f}")
+        pdf.drawRightString(358, current_y, f"{price_val:,.2f}")
 
         # 6. Unit
-        pdf.drawCentredString(415, current_y, str(item.get("unit", "Pcs") or "Pcs"))
+        pdf.drawCentredString(378, current_y, str(item.get("unit", "Pcs") or "Pcs"))
 
-        # 7. Discount
-        discount_value = float(item.get("discount", 0))
+        # 7. Increase %
+        inc_val = float(item.get("increase", 0) or 0)
+        inc_str = f"+{int(inc_val) if inc_val.is_integer() else inc_val}%" if inc_val > 0 else "-"
+        pdf.drawCentredString(415, current_y, inc_str)
+
+        # 8. Discount %
+        discount_value = float(item.get("discount", 0) or 0)
         if discount_value > 0:
             disc_base = item.get("discount_base", "Price")
-            disc_str = f"{int(discount_value) if discount_value.is_integer() else discount_value}% on {disc_base}"
+            disc_str = f"-{int(discount_value) if discount_value.is_integer() else discount_value}% ({disc_base})"
         else:
-            disc_str = "0%"
+            disc_str = "-"
         pdf.drawCentredString(465, current_y, disc_str)
 
-        # 8. Total
+        # 9. Total
         total_val = float(item.get("total", 0))
         pdf.setFont("Helvetica-Bold", 8.5)
         pdf.drawRightString(548, current_y, f"{total_val:,.2f}")
@@ -433,7 +459,7 @@ def generate_a4_invoice_pdf(
     pdf.rect(40, table_bottom, 515, (table_top - table_bottom), fill=False, stroke=True)
 
     # Vertical Column Divider Lines
-    v_dividers = [70, 95, 290, 340, 395, 435, 495]
+    v_dividers = [65, 92, 270, 318, 362, 395, 435, 495]
     pdf.setStrokeColorRGB(0.88, 0.89, 0.92)
     pdf.setLineWidth(0.5)
     for vx in v_dividers:
@@ -762,16 +788,22 @@ class InvoiceUI:
         self.unit_entry = tk.Entry(product_frame, width=6, state="readonly", font=("Arial", 11, "bold"), justify="center")
         self.unit_entry.grid(row=1, column=7, padx=4, pady=3, ipady=2, sticky="ew")
 
-        # Row 2: Discount %, Discount Base, Add To Cart Button
+        # Row 2: Increase %, Discount %, Base, Add To Cart Button
         self.discount_base_var = tk.StringVar(value="Price")
 
-        tk.Label(product_frame, text="Disc %:", font=("Arial", 10, "bold")).grid(row=2, column=0, padx=4, pady=3, sticky="w")
+        tk.Label(product_frame, text="Inc %:", font=("Arial", 10, "bold")).grid(row=2, column=0, padx=4, pady=3, sticky="w")
+        self.increase_entry = tk.Entry(product_frame, width=6, font=("Arial", 11, "bold"), justify="center")
+        self.increase_entry.insert(0, "0")
+        self.increase_entry.grid(row=2, column=1, padx=4, pady=3, ipady=2, sticky="ew")
+        self._apply_entry_focus(self.increase_entry)
+
+        tk.Label(product_frame, text="Disc %:", font=("Arial", 10, "bold")).grid(row=2, column=2, padx=4, pady=3, sticky="w")
         self.discount_entry = tk.Entry(product_frame, width=6, font=("Arial", 11, "bold"), justify="center")
         self.discount_entry.insert(0, "0")
-        self.discount_entry.grid(row=2, column=1, padx=4, pady=3, ipady=2, sticky="ew")
+        self.discount_entry.grid(row=2, column=3, padx=4, pady=3, ipady=2, sticky="ew")
         self._apply_entry_focus(self.discount_entry)
 
-        tk.Label(product_frame, text="Disc On:", font=("Arial", 10, "bold")).grid(row=2, column=2, padx=4, pady=3, sticky="w")
+        tk.Label(product_frame, text="Base:", font=("Arial", 10, "bold")).grid(row=2, column=4, padx=4, pady=3, sticky="w")
         self.discount_base_label = tk.Label(
             product_frame,
             textvariable=self.discount_base_var,
@@ -779,7 +811,7 @@ class InvoiceUI:
             fg="#0066cc",
             anchor="w"
         )
-        self.discount_base_label.grid(row=2, column=3, padx=4, pady=3, sticky="w")
+        self.discount_base_label.grid(row=2, column=5, padx=4, pady=3, sticky="w")
 
         self.add_btn = tk.Button(
             product_frame,
@@ -794,7 +826,7 @@ class InvoiceUI:
             pady=3,
             font=("Arial", 10, "bold")
         )
-        self.add_btn.grid(row=2, column=4, columnspan=4, padx=6, pady=3, sticky="e")
+        self.add_btn.grid(row=2, column=6, columnspan=2, padx=6, pady=3, sticky="e")
         self._apply_btn_focus(self.add_btn, ring_color="#ffcc00", trigger_func=self.add_to_cart)
 
         # =========================
@@ -809,6 +841,10 @@ class InvoiceUI:
             lambda e: (self.price_entry.focus_set(), self.price_entry.selection_range(0, tk.END))
         )
         self.price_entry.bind(
+            "<Return>",
+            lambda e: (self.increase_entry.focus_set(), self.increase_entry.selection_range(0, tk.END))
+        )
+        self.increase_entry.bind(
             "<Return>",
             lambda e: (self.discount_entry.focus_set(), self.discount_entry.selection_range(0, tk.END))
         )
@@ -844,8 +880,9 @@ class InvoiceUI:
             "MRP",
             "Price",
             "Unit",
-            "Discount",
-            "Discount On",
+            "Inc %",
+            "Disc %",
+            "Base",
             "Total",
             "Edit",
             "Delete"
@@ -861,23 +898,39 @@ class InvoiceUI:
         for col in columns:
             self.tree.heading(col, text=col)
             width = 100
+            minwidth = 50
             if col == "S.No":
+                width = 38
+                minwidth = 28
+            elif col == "Qty":
                 width = 45
+                minwidth = 35
             elif col == "Product":
-                width = 280
+                width = 270
+                minwidth = 140
             elif col in ("MRP", "Price"):
-                width = 90
-            elif col in ("Qty", "Unit", "Discount"):
                 width = 75
-            elif col == "Discount On":
-                width = 95
-            elif col in ("Edit", "Delete"):
+                minwidth = 50
+            elif col == "Unit":
+                width = 48
+                minwidth = 35
+            elif col in ("Inc %", "Disc %"):
+                width = 58
+                minwidth = 40
+            elif col == "Base":
                 width = 65
+                minwidth = 45
+            elif col == "Total":
+                width = 85
+                minwidth = 60
+            elif col in ("Edit", "Delete"):
+                width = 52
+                minwidth = 38
 
             self.tree.column(
                 col,
                 width=width,
-                minwidth=35 if col == "S.No" else 50,
+                minwidth=minwidth,
                 anchor="center" if col != "Product" else "w"
             )
 
@@ -904,7 +957,6 @@ class InvoiceUI:
         self.tree.bind("<Delete>", lambda e: self._delete_selected_cart_row())
         self.tree.bind("<BackSpace>", lambda e: self._delete_selected_cart_row())
         self.tree.bind("<Return>", lambda e: self._edit_selected_cart_row())
-        self.tree.bind("<F4>", lambda e: self._edit_selected_cart_row())
 
 
 
@@ -1086,14 +1138,25 @@ class InvoiceUI:
         """Binds global keyboard shortcuts for fast POS billing."""
         try:
             top = self.frame.winfo_toplevel()
-            top.bind("<Control-p>", lambda e: (self.save_invoice(format_type="thermal"), "break")[1])
-            top.bind("<Control-P>", lambda e: (self.save_invoice(format_type="thermal"), "break")[1])
-            top.bind("<Control-j>", lambda e: (self.save_invoice(format_type="a4"), "break")[1])
-            top.bind("<Control-J>", lambda e: (self.save_invoice(format_type="a4"), "break")[1])
-            top.bind("<Control-n>", lambda e: (self.clear_invoice(), "break")[1])
-            top.bind("<Control-N>", lambda e: (self.clear_invoice(), "break")[1])
+            # Ctrl+P: Print / Save 80mm Thermal Receipt (Default)
+            for seq in ("<Control-p>", "<Control-P>", "<Control-Key-p>", "<Control-Key-P>"):
+                top.bind_all(seq, lambda e: self._handle_shortcut_save("thermal"))
+            # Ctrl+J: Save & Generate A4 PDF
+            for seq in ("<Control-j>", "<Control-J>", "<Control-Key-j>", "<Control-Key-J>"):
+                top.bind_all(seq, lambda e: self._handle_shortcut_save("a4"))
+            # Ctrl+N: Clear / New Bill
+            for seq in ("<Control-n>", "<Control-N>", "<Control-Key-n>", "<Control-Key-N>"):
+                top.bind_all(seq, lambda e: self._handle_shortcut_clear())
         except Exception:
             pass
+
+    def _handle_shortcut_save(self, format_type):
+        self.save_invoice(format_type=format_type)
+        return "break"
+
+    def _handle_shortcut_clear(self):
+        self.clear_invoice()
+        return "break"
 
 
 
@@ -1317,40 +1380,56 @@ class InvoiceUI:
             self.unit_entry.config(state="readonly")
 
         try:
-            discount = float(self.discount_entry.get())
+            increase = float(self.increase_entry.get().strip() or 0)
+            if increase < 0:
+                messagebox.showerror(
+                    "Invalid Increase",
+                    "Increase percentage cannot be negative.",
+                    parent=self.frame.winfo_toplevel()
+                )
+                return
+        except ValueError:
+            messagebox.showerror(
+                "Invalid Increase",
+                "Please enter a valid numeric value in Inc %.",
+                parent=self.frame.winfo_toplevel()
+            )
+            return
+
+        try:
+            discount = float(self.discount_entry.get().strip() or 0)
             if discount < 0 or discount > 100:
                 messagebox.showerror(
                     "Invalid Discount",
-                    "Discount must be between 0% and 100%."
+                    "Discount must be between 0% and 100%.",
+                    parent=self.frame.winfo_toplevel()
                 )
                 return
         except ValueError:
             messagebox.showerror(
                 "Invalid Discount",
-                "Please enter a valid numeric value in Discount."
+                "Please enter a valid numeric value in Disc %.",
+                parent=self.frame.winfo_toplevel()
             )
             return
-
 
         discount_base = self.discount_base_var.get() or "Price"
 
-
         if quantity > product[4]:
-
             messagebox.showerror(
                 "Out of Stock",
-                f"Only {product[4]} units of this product are available in inventory."
+                f"Only {product[4]} units of this product are available in inventory.",
+                parent=self.frame.winfo_toplevel()
             )
-
             return
-        mrp = float(self.mrp_entry.get() or 0)
 
-        if discount_base == "MRP":
-            # Discount is applied on MRP
-            effective_price = mrp - (mrp * discount / 100)
-        else:
-            # Discount is applied on entered selling price
-            effective_price = custom_price - (custom_price * discount / 100)
+        mrp = float(self.mrp_entry.get() or 0)
+        base_price = mrp if discount_base == "MRP" else custom_price
+
+        # Increase adds % to base price, Discount subtracts % from base price
+        effective_price = base_price + (base_price * increase / 100.0) - (base_price * discount / 100.0)
+        if effective_price < 0:
+            effective_price = 0.0
 
         total = effective_price * quantity
 
@@ -1363,6 +1442,7 @@ class InvoiceUI:
                 "mrp": mrp,
                 "price": custom_price,
                 "unit": unit,
+                "increase": increase,
                 "discount": discount,
                 "discount_base": discount_base,
                 "total": total
@@ -1387,7 +1467,8 @@ class InvoiceUI:
             if (
                 itm["product_id"] == product[0]
                 and abs(itm["price"] - custom_price) < 0.001
-                and abs(itm["discount"] - discount) < 0.001
+                and abs(itm.get("increase", 0) - increase) < 0.001
+                and abs(itm.get("discount", 0) - discount) < 0.001
                 and itm.get("discount_base", "Price") == discount_base
             ):
                 existing_item = itm
@@ -1419,6 +1500,7 @@ class InvoiceUI:
             "mrp": mrp,
             "price": custom_price,
             "unit": unit,
+            "increase": increase,
             "discount": discount,
             "discount_base": discount_base,
             "total": total
@@ -1520,6 +1602,15 @@ class InvoiceUI:
         )
         self.unit_entry.config(state="readonly")
 
+        self.increase_entry.delete(
+            0,
+            tk.END
+        )
+        self.increase_entry.insert(
+            0,
+            "0"
+        )
+
         self.discount_entry.delete(
             0,
             tk.END
@@ -1562,6 +1653,7 @@ class InvoiceUI:
             "mrp": self.mrp_entry.get(),
             "price": self.price_entry.get(),
             "unit": self.unit_entry.get(),
+            "increase": self.increase_entry.get(),
             "discount": self.discount_entry.get(),
             "discount_base": self.discount_base_var.get(),
             "paid_amount": self.paid_entry.get(),
@@ -1596,6 +1688,9 @@ class InvoiceUI:
         self.unit_entry.delete(0, tk.END)
         self.unit_entry.insert(0, state["unit"])
         self.unit_entry.config(state="readonly")
+
+        self.increase_entry.delete(0, tk.END)
+        self.increase_entry.insert(0, state.get("increase", "0"))
 
         self.discount_entry.delete(0, tk.END)
         self.discount_entry.insert(0, state["discount"])
@@ -1813,12 +1908,12 @@ class InvoiceUI:
         )
 
         # EDIT COLUMN
-        if column_number == 10:
+        if column_number == 11:
 
             self.edit_cart_item(item)
 
         # DELETE COLUMN
-        elif column_number == 11:
+        elif column_number == 12:
 
             self.delete_cart_item(item)
 
@@ -1911,6 +2006,16 @@ class InvoiceUI:
             state="readonly"
         )
 
+        self.increase_entry.delete(
+            0,
+            tk.END
+        )
+
+        self.increase_entry.insert(
+            0,
+            cart_item.get("increase", 0)
+        )
+
         self.discount_entry.delete(
             0,
             tk.END
@@ -1918,7 +2023,7 @@ class InvoiceUI:
 
         self.discount_entry.insert(
             0,
-            cart_item["discount"]
+            cart_item.get("discount", 0)
         )
 
         self.discount_base_var.set(cart_item.get("discount_base", "Price"))
@@ -1944,6 +2049,11 @@ class InvoiceUI:
 
         for idx, item in enumerate(self.cart_items):
             tag = "evenrow" if idx % 2 == 0 else "oddrow"
+            inc_val = float(item.get("increase", 0) or 0)
+            disc_val = float(item.get("discount", 0) or 0)
+            inc_str = f"+{int(inc_val) if inc_val.is_integer() else inc_val}%" if inc_val > 0 else "0%"
+            disc_str = f"-{int(disc_val) if disc_val.is_integer() else disc_val}%" if disc_val > 0 else "0%"
+
             self.tree.insert(
                 "",
                 "end",
@@ -1954,11 +2064,12 @@ class InvoiceUI:
                     item["mrp"],
                     item["price"],
                     item["unit"],
-                    item["discount"],
+                    inc_str,
+                    disc_str,
                     item.get("discount_base", "Price"),
-                    item["total"],
-                    "✏",
-                    "❌"
+                    f"{item['total']:,.2f}",
+                    " ✏️ ",
+                    " ❌ "
                 ),
                 tags=(tag,)
             )
@@ -1979,35 +2090,9 @@ class InvoiceUI:
             self.delete_cart_item(selected[0])
 
     def _edit_selected_cart_row(self):
-        """Edit currently selected row in table via Enter / F4 key."""
+        """Edit currently selected row in table via Enter key."""
         selected = self.tree.selection()
         if selected:
             self.edit_cart_item(selected[0])
-
-    def _bind_tally_shortcuts(self):
-        """Bind global Tally / POS keyboard shortcuts to toplevel window."""
-        top = self.frame.winfo_toplevel()
-        # F1: Focus Customer Search
-        top.bind("<F1>", lambda e: self.customer_combo.focus_set())
-        # F2: Focus Product Search
-        top.bind("<F2>", lambda e: self.product_combo.focus_set())
-        # F3: Quick Add Customer Popup
-        top.bind("<F3>", lambda e: self.open_customer_popup())
-        top.bind("<Alt-c>", lambda e: self.open_customer_popup())
-        top.bind("<Alt-C>", lambda e: self.open_customer_popup())
-        # F4: Edit Selected Item in Table
-        top.bind("<F4>", lambda e: self._edit_selected_cart_row())
-        # F9 / Ctrl+S: Save & Print 80mm Thermal Receipt (Default)
-        top.bind("<F9>", lambda e: self.save_invoice("thermal"))
-        top.bind("<Control-s>", lambda e: self.save_invoice("thermal"))
-        top.bind("<Control-S>", lambda e: self.save_invoice("thermal"))
-        # Ctrl+P: Save & Print A4 PDF
-        top.bind("<Control-p>", lambda e: self.save_invoice("a4"))
-        top.bind("<Control-P>", lambda e: self.save_invoice("a4"))
-        # F12: Jump to Paid Amount
-        top.bind("<F12>", lambda e: (self.paid_entry.focus_set(), self.paid_entry.selection_range(0, tk.END)))
-        # Alt+X: Clear / New Bill
-        top.bind("<Alt-x>", lambda e: self.clear_invoice())
-        top.bind("<Alt-X>", lambda e: self.clear_invoice())
 
 

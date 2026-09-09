@@ -220,6 +220,16 @@ def run_migrations():
         ADD COLUMN mrp REAL
         """)
 
+    if not column_exists(
+        "invoice_items",
+        "increase"
+    ):
+
+        cursor.execute("""
+        ALTER TABLE invoice_items
+        ADD COLUMN increase REAL DEFAULT 0.0
+        """)
+
     # =========================
     # APP SETTINGS TABLE
     # =========================
@@ -949,18 +959,20 @@ def save_complete_invoice(
             price,
             discount,
             total,
-            discount_base
+            discount_base,
+            increase
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             invoice_id,
             item["product_id"],
             item["quantity"],
             item["mrp"],
             item["price"],
-            item["discount"],
+            item.get("discount", 0.0),
             item["total"],
-            item.get("discount_base", "Price")
+            item.get("discount_base", "Price"),
+            item.get("increase", 0.0)
         ))
 
         # UPDATE STOCK
@@ -1517,11 +1529,13 @@ def get_invoice_items(invoice_id):
     SELECT
         invoice_items.quantity,
         products.name,
+        COALESCE(invoice_items.mrp, 0.0),
         invoice_items.price,
         products.unit,
         invoice_items.discount,
         COALESCE(invoice_items.discount_base, 'Price'),
-        invoice_items.total
+        invoice_items.total,
+        COALESCE(invoice_items.increase, 0.0)
     FROM invoice_items
     JOIN products ON invoice_items.product_id = products.id
     WHERE invoice_items.invoice_id = ?

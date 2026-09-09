@@ -997,7 +997,21 @@ class LedgerUI:
         # Load items
         invoice_items = get_invoice_items(invoice_id)
         for idx, item in enumerate(invoice_items):
-            qty, product, price, unit, discount, discount_base, item_total = item
+            if len(item) >= 9:
+                qty, product, mrp, price, unit, discount, discount_base, item_total, increase = item[:9]
+            elif len(item) == 8:
+                qty, product, mrp, price, unit, discount, discount_base, item_total = item
+            elif len(item) == 7:
+                qty, product, price, unit, discount, discount_base, item_total = item
+            else:
+                qty = item[0] if len(item) > 0 else 1
+                product = item[1] if len(item) > 1 else ""
+                price = item[2] if len(item) > 2 else 0
+                unit = item[3] if len(item) > 3 else "Pcs"
+                discount = item[4] if len(item) > 4 else 0
+                discount_base = item[5] if len(item) > 5 else "Price"
+                item_total = item[6] if len(item) > 6 else (qty * price)
+
             values = (str(idx + 1), qty, product, f"₹{price}", unit, f"{discount}%", discount_base, f"₹{item_total}")
             tag = "evenrow" if idx % 2 == 0 else "oddrow"
             items_tree.insert("", "end", values=values, tags=(tag,))
