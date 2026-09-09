@@ -50,7 +50,7 @@ $IssFile = Join-Path $ProjectDir "installer\setup_script.iss"
 Write-Host "[3/4] Compiling Installer using Inno Setup..." -ForegroundColor Cyan
 & $IsccPath $IssFile
 
-$InstallerExe = Join-Path $ProjectDir "dist_installer\BusinessApp_Setup_v1.0.exe"
+$InstallerExe = Join-Path $ProjectDir "dist_installer\BizDabba_Setup_v1.0.exe"
 if (-not (Test-Path $InstallerExe)) {
     Write-Error "Failed to generate installer executable at: $InstallerExe"
     exit 1
@@ -64,5 +64,5 @@ Write-Host "[4/4] Digitally Signing Installer Executable..." -ForegroundColor Cy
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Green
 Write-Host "   BUILD & SIGNING COMPLETE!                           " -ForegroundColor Green
-Write-Host "   Installer: dist_installer\BusinessApp_Setup_v1.0.exe" -ForegroundColor Green
+Write-Host "   Installer: dist_installer\BizDabba_Setup_v1.0.exe   " -ForegroundColor Green
 Write-Host "=======================================================" -ForegroundColor Green

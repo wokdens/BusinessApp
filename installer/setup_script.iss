@@ -1,16 +1,16 @@
-; Inno Setup Script for BusinessApp
+; Inno Setup Script for BizDabba
 ; Powered by wokdens.com
 
-#define MyAppName "BusinessApp"
+#define MyAppName "BizDabba"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "Wokdens"
+#define MyAppPublisher "wokdens.com"
 #define MyAppURL "https://wokdens.com"
 #define MyAppExeName "BusinessApp.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
 AppId={{D9A3B657-4E2F-4A92-BF38-9B25A7C12F89}
-AppName={#MyAppName}
+AppName={#MyAppName} by wokdens.com
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
@@ -18,10 +18,10 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 
 DefaultDirName={localappdata}\Programs\{#MyAppName}
-DefaultGroupName={#MyAppName}
+DefaultGroupName={#MyAppName} by wokdens.com
 DisableProgramGroupPage=yes
 OutputDir=..\dist_installer
-OutputBaseFilename=BusinessApp_Setup_v1.0
+OutputBaseFilename=BizDabba_Setup_v1.0
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -31,10 +31,10 @@ RestartApplications=no
 
 ; Version Info embedded into Setup.exe
 VersionInfoVersion=1.0.0.0
-VersionInfoCompany=Wokdens
-VersionInfoDescription=BusinessApp Installation Wizard
+VersionInfoCompany=wokdens.com
+VersionInfoDescription=BizDabba Installation Wizard
 VersionInfoCopyright=Copyright (C) 2026 Powered by wokdens.com
-VersionInfoProductName=BusinessApp
+VersionInfoProductName=BizDabba by wokdens.com
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

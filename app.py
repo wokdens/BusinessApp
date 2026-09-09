@@ -16,12 +16,22 @@ from database import (
 
 from ui.main_window import MainWindow
 
+# Enable Windows High-DPI scaling awareness for crisp rendering across all screen resolutions
+if sys.platform == "win32":
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Per-monitor DPI aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()  # System DPI aware fallback
+        except Exception:
+            pass
+
 # =========================
 # SINGLE INSTANCE LOCK
 # =========================
 _app_mutex = None
 
-def enforce_single_instance(app_title="Business App"):
+def enforce_single_instance(app_title="BizDabba by wokdens.com"):
     global _app_mutex
     if sys.platform == "win32":
         try:
@@ -30,7 +40,7 @@ def enforce_single_instance(app_title="Business App"):
             kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
             kernel32.GetLastError.restype = wintypes.DWORD
 
-            _app_mutex = kernel32.CreateMutexW(None, False, r"Local\Wokdens_BusinessApp_SingleInstance_Mutex")
+            _app_mutex = kernel32.CreateMutexW(None, False, r"Local\Wokdens_BizDabba_SingleInstance_Mutex")
             if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
                 user32 = ctypes.windll.user32
                 hwnd = user32.FindWindowW(None, app_title)
@@ -41,7 +51,7 @@ def enforce_single_instance(app_title="Business App"):
         except Exception as e:
             print(f"Single instance check notice: {e}")
 
-enforce_single_instance("Business App")
+enforce_single_instance("BizDabba by wokdens.com")
 
 # =========================
 # CREATE DATABASE TABLES & MIGRATIONS

@@ -802,14 +802,14 @@ def update_stock(product_id, new_stock):
 # CUSTOMER FUNCTIONS
 # =========================
 
-def get_or_create_customer(customer_name):
+def get_or_create_customer(customer_name, phone="", address=""):
 
     conn = get_connection()
 
     cursor = conn.cursor()
 
     cursor.execute("""
-    SELECT id
+    SELECT id, phone, address
     FROM customers
     WHERE name = ?
     """, (
@@ -821,14 +821,24 @@ def get_or_create_customer(customer_name):
     if customer:
 
         customer_id = customer[0]
+        if phone or address:
+            cursor.execute("""
+            UPDATE customers
+            SET phone = CASE WHEN ? != '' THEN ? ELSE phone END,
+                address = CASE WHEN ? != '' THEN ? ELSE address END
+            WHERE id = ?
+            """, (phone, phone, address, address, customer_id))
+            conn.commit()
 
     else:
 
         cursor.execute("""
-        INSERT INTO customers(name)
-        VALUES(?)
+        INSERT INTO customers(name, phone, address)
+        VALUES(?, ?, ?)
         """, (
             customer_name,
+            phone,
+            address
         ))
 
         conn.commit()

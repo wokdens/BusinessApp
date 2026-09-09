@@ -46,7 +46,7 @@ echo.
 echo =======================================================
 echo   [SUCCESS] Wokdens Security Certificate Registered!
 echo   Windows SmartScreen and Defender will now trust
-echo   BusinessApp and its Installer.
+echo   BizDabba and its Installer.
 echo =======================================================
 echo.
 pause
