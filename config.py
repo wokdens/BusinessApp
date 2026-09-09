@@ -32,3 +32,6 @@ DATABASE_PATH = os.path.join(DB_DIR, "business.db")
 SHOP_NAME = "Electrical Wholesale & Retail"
 SHOP_PHONE = "9876543210"
 SHOP_ADDRESS = "Wholesale Electrical Market"
+
+# Master Password for Exported CSV & Data Archives
+CSV_MASTER_EXPORT_PASSWORD = "Wokdens@CSV#2026"

@@ -120,6 +120,17 @@ For client or trade counter deployments:
 
 ---
 
+## 🔒 Master Passwords & Security Reference
+
+> **Confidential - Internal Reference Only**
+
+| Security Key | Value / Password | Purpose |
+| :--- | :--- | :--- |
+| **CSV Export Master Password** | `Wokdens@CSV#2026` | Master password required to extract/open all password-protected CSV zip archives (Inventory, Ledger Dues, and Security Audit Logs). |
+| **Admin Authorization PIN** | Configured in `database.py` (Default: `1234` / `9999`) | Required for price overrides, stock write-offs, deletions, and initiating data exports. |
+
+---
+
 ## 📄 License & Attribution
 - Developed & Maintained by **[wokdens.com](https://wokdens.com)**
 - Dedicated for electrical trade counters, wholesale dealers, and retailers.

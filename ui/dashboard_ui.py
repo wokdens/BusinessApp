@@ -449,25 +449,33 @@ class DashboardUI:
         ).pack(side="left", padx=20)
 
         def export_audit_csv():
+            from ui.csv_security import export_encrypted_csv_archive
+
             file_path = filedialog.asksaveasfilename(
-                title="Export Audit Logs",
-                defaultextension=".csv",
-                filetypes=[("CSV Files", "*.csv")],
-                initialfile="security_audit_logs.csv",
+                title="Export Password-Protected Audit Logs",
+                defaultextension=".zip",
+                filetypes=[("Password-Protected ZIP Archive (*.zip)", "*.zip"), ("CSV Files (*.csv)", "*.csv")],
+                initialfile="security_audit_logs.zip",
                 parent=dialog
             )
             if not file_path:
                 return
             try:
-                import csv
-                with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-                    writer = csv.writer(f)
-
-                    writer.writerow(["Log ID", "Timestamp", "Action Type", "Event Description", "Authorized By"])
-                    for row in logs:
-                        writer.writerow(row)
-                record_audit_log("CSV_EXPORT", f"Exported security audit logs to {file_path}")
-                messagebox.showinfo("Export Successful", f"Audit logs saved to:\n{file_path}", parent=dialog)
+                headers = ["Log ID", "Timestamp", "Action Type", "Event Description", "Authorized By"]
+                saved_zip = export_encrypted_csv_archive(
+                    target_path=file_path,
+                    base_name="security_audit_logs.csv",
+                    header_row=headers,
+                    data_rows=logs
+                )
+                record_audit_log("CSV_EXPORT", f"Exported password-protected security audit logs to {saved_zip}")
+                messagebox.showinfo(
+                    "Export Successful (Password Protected)",
+                    f"Audit logs exported successfully!\n\n"
+                    f"📁 Saved to:\n{saved_zip}\n\n"
+                    f"🔒 Password Protected: Enter your Master Export Password when extracting.",
+                    parent=dialog
+                )
             except Exception as e:
                 messagebox.showerror("Export Error", str(e), parent=dialog)
 

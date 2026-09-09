@@ -1161,16 +1161,18 @@ class InventoryUI:
             return
 
         file_path = filedialog.asksaveasfilename(
-            title="Export Inventory",
-            defaultextension=".csv",
-            filetypes=[("CSV Files", "*.csv")],
-            initialfile="inventory_backup.csv"
+            title="Export Password-Protected Inventory Data",
+            defaultextension=".zip",
+            filetypes=[("Password-Protected ZIP Archive (*.zip)", "*.zip"), ("CSV File (*.csv)", "*.csv")],
+            initialfile="inventory_backup.zip"
         )
 
         if not file_path:
             return
 
         try:
+            from ui.csv_security import export_encrypted_csv_archive
+
             conn = get_connection()
             cursor = conn.cursor()
 
@@ -1191,37 +1193,32 @@ class InventoryUI:
             products = cursor.fetchall()
             conn.close()
 
-            with open(
-                file_path,
-                "w",
-                newline="",
-                encoding="utf-8-sig"
-            ) as file:
+            headers = [
+                "Category",
+                "Product Name",
+                "MRP",
+                "Purchase Price",
+                "Selling Price",
+                "Unit",
+                "Stock",
+                "Discount On"
+            ]
 
-
-                writer = csv.writer(file)
-
-                # Header with Powered by Wokdens metadata
-                writer.writerow([
-                    "Category",
-                    "Product Name",
-                    "MRP",
-                    "Purchase Price",
-                    "Selling Price",
-                    "Unit",
-                    "Stock",
-                    "Discount On"
-                ])
-
-                writer.writerows(products)
-
-            record_audit_log("CSV_EXPORT", f"Exported product inventory catalog ({len(products)} products) to {file_path}")
-
-            messagebox.showinfo(
-                "Success",
-                f"Inventory exported successfully!\n\nLocation:\n{file_path}"
+            saved_zip = export_encrypted_csv_archive(
+                target_path=file_path,
+                base_name="inventory_catalog.csv",
+                header_row=headers,
+                data_rows=products
             )
 
+            record_audit_log("CSV_EXPORT", f"Exported password-protected inventory catalog ({len(products)} products) to {saved_zip}")
+
+            messagebox.showinfo(
+                "Export Successful (Password Protected)",
+                f"Inventory exported successfully!\n\n"
+                f"📁 Saved to:\n{saved_zip}\n\n"
+                f"🔒 Password Protected: Enter your Master Export Password when extracting."
+            )
 
         except Exception as e:
             messagebox.showerror(

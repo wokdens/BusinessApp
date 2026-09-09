@@ -248,13 +248,13 @@ class LedgerUI:
             return
 
         from tkinter import filedialog
-        import csv
+        from ui.csv_security import export_encrypted_csv_archive
 
         file_path = filedialog.asksaveasfilename(
-            title="Export Customer Ledger",
-            defaultextension=".csv",
-            filetypes=[("CSV Files", "*.csv")],
-            initialfile="customer_ledger.csv"
+            title="Export Password-Protected Customer Ledger",
+            defaultextension=".zip",
+            filetypes=[("Password-Protected ZIP Archive (*.zip)", "*.zip"), ("CSV File (*.csv)", "*.csv")],
+            initialfile="customer_ledger.zip"
         )
 
         if not file_path:
@@ -262,16 +262,24 @@ class LedgerUI:
 
         try:
             customers = get_customers_with_pending()
-            with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f)
+            headers = ["Customer Name", "Total Pending Dues (Rs)", "Invoices Count"]
+            data_rows = [[row[0], row[1], row[2]] for row in customers]
 
-                writer.writerow(["Customer Name", "Total Pending Dues (Rs)", "Invoices Count"])
-                for row in customers:
-                    writer.writerow([row[0], row[1], row[2]])
+            saved_zip = export_encrypted_csv_archive(
+                target_path=file_path,
+                base_name="customer_ledger.csv",
+                header_row=headers,
+                data_rows=data_rows
+            )
 
-            record_audit_log("CSV_EXPORT", f"Exported customer ledger dues ({len(customers)} customers) to {file_path}")
+            record_audit_log("CSV_EXPORT", f"Exported password-protected customer ledger dues ({len(customers)} customers) to {saved_zip}")
 
-            messagebox.showinfo("Export Successful", f"Customer ledger exported successfully to:\n{file_path}")
+            messagebox.showinfo(
+                "Export Successful (Password Protected)",
+                f"Customer ledger exported successfully!\n\n"
+                f"📁 Saved to:\n{saved_zip}\n\n"
+                f"🔒 Password Protected: Enter your Master Export Password when extracting."
+            )
         except Exception as e:
             messagebox.showerror("Export Error", str(e))
 

@@ -210,6 +210,39 @@ def run_tests():
 
         print('CustomerPopup Indian mobile validation and duplicate detection tested OK.')
 
+        # Step 8: Test Password-Protected CSV Export & Decryption
+        print('[TEST 8] Testing Password-Protected CSV Export & Decryption...')
+        from ui.csv_security import export_encrypted_csv_archive
+        from config import CSV_MASTER_EXPORT_PASSWORD
+        import zipfile
+
+        test_zip_path = os.path.join(os.path.dirname(__file__), 'test_export.zip')
+        sample_headers = ['Category', 'Product Name', 'Selling Price']
+        sample_rows = [['Fans', 'Ceiling Fan 48"', 2100], ['Lighting', 'LED Bulb 12W', 120]]
+
+        created_zip = export_encrypted_csv_archive(
+            target_path=test_zip_path,
+            base_name='inventory_catalog.csv',
+            header_row=sample_headers,
+            data_rows=sample_rows
+        )
+        assert os.path.exists(created_zip), 'Encrypted ZIP was not created!'
+
+        # Verify decryption using Master Password
+        zf = zipfile.ZipFile(created_zip)
+        zf.setpassword(CSV_MASTER_EXPORT_PASSWORD.encode('utf-8'))
+        decrypted_csv = zf.read('inventory_catalog.csv').decode('utf-8-sig')
+        zf.close()
+
+        assert 'Ceiling Fan 48"' in decrypted_csv, 'Decrypted content missing expected data!'
+        assert 'LED Bulb 12W' in decrypted_csv, 'Decrypted content missing expected data!'
+
+        # Clean up test file
+        if os.path.exists(test_zip_path):
+            os.remove(test_zip_path)
+
+        print('Password-Protected CSV export and Master Password decryption verified 100% OK.')
+
     root.destroy()
     print('=' * 60)
     print('ALL TESTS PASSED WITH ZERO ERRORS!')
