@@ -1422,12 +1422,10 @@ class InventoryUI:
                         INSERT INTO products(category, name, mrp, purchase_price, selling_price, unit, stock, discount_base)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (category, product_name, mrp, purchase_price, selling_price, unit, stock, discount_base))
-                    added_count += 1
-
             conn.commit()
             conn.close()
 
-            self.load_categories()
+            self.refresh_categories()
             self.load_products()
 
             record_audit_log(
