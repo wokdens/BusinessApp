@@ -310,12 +310,13 @@ def create_tables():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category TEXT,
-        name TEXT,
-        mrp REAL,
-        purchase_price TEXT,
-        selling_price REAL,
-        stock INTEGER,
+        category TEXT DEFAULT 'General',
+        name TEXT NOT NULL,
+        mrp REAL DEFAULT 0.0,
+        purchase_price REAL DEFAULT 0.0,
+        selling_price REAL DEFAULT 0.0,
+        unit TEXT DEFAULT 'Pcs',
+        stock INTEGER DEFAULT 0,
         discount_base TEXT DEFAULT 'Price'
     )
     """)
@@ -324,7 +325,9 @@ def create_tables():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE
+        name TEXT UNIQUE,
+        phone TEXT DEFAULT '',
+        address TEXT DEFAULT ''
     )
     """)
 
@@ -332,6 +335,7 @@ def create_tables():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_number TEXT,
         customer_id INTEGER,
         total REAL,
         paid REAL,
@@ -348,10 +352,12 @@ def create_tables():
         invoice_id INTEGER,
         product_id INTEGER,
         quantity INTEGER,
-        mrp REAL,
-        price REAL,
-        discount REAL,
-        total REAL,
+        mrp REAL DEFAULT 0.0,
+        price REAL DEFAULT 0.0,
+        custom_price REAL DEFAULT 0.0,
+        discount REAL DEFAULT 0.0,
+        total REAL DEFAULT 0.0,
+        unit TEXT DEFAULT 'Pcs',
         discount_base TEXT DEFAULT 'Price'
     )
     """)
@@ -398,6 +404,9 @@ def create_tables():
     conn.commit()
 
     conn.close()
+
+    # Automatically run migrations to guarantee schema synchronization
+    run_migrations()
 
 
 

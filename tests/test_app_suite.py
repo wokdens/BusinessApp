@@ -243,10 +243,28 @@ def run_tests():
 
         print('Password-Protected CSV export and Master Password decryption verified 100% OK.')
 
+        # Step 9: Test UI Import CSV and Category Refresh
+        print('[TEST 9] Testing InventoryUI Import CSV and Live Refresh...')
+        app.open_inventory()
+        inv_ui = app.current_ui
+        csv_file = os.path.join(os.path.dirname(__file__), '..', 'INVENTORY_SARTAJ_0786.csv')
+        assert os.path.exists(csv_file), 'INVENTORY_SARTAJ_0786.csv not found in repo root!'
+
+        with patch('ui.inventory_ui.filedialog.askopenfilename', return_value=csv_file), \
+             patch('ui.inventory_ui.request_admin_pin', return_value=True), \
+             patch('tkinter.messagebox.showinfo') as mock_info2:
+            inv_ui.import_products_csv()
+
+        assert len(inv_ui.tree.get_children()) > 500, 'Products not loaded into Inventory table!'
+        assert len(database.get_all_categories()) >= 20, 'Categories not stored in database!'
+        print(f'InventoryUI imported {len(inv_ui.tree.get_children())} products and {len(database.get_all_categories())} categories successfully.')
+
     root.destroy()
     print('=' * 60)
-    print('ALL TESTS PASSED WITH ZERO ERRORS!')
+    print('ALL 9 END-TO-END TESTS PASSED WITH ZERO ERRORS!')
     print('=' * 60)
+
 
 if __name__ == '__main__':
     run_tests()
+
