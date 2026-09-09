@@ -559,6 +559,88 @@ class InvoiceUI:
 
         self.refresh_customers()
 
+        def apply_entry_focus_style(widget):
+            """Adds crisp high-visibility blue border & soft light blue tint on focus."""
+            widget.config(
+                relief="solid",
+                bd=1,
+                highlightthickness=1,
+                highlightbackground="#ced4da",
+                highlightcolor="#2563eb",
+                bg="#ffffff"
+            )
+            def _on_f_in(e):
+                try:
+                    widget.config(
+                        highlightthickness=2,
+                        highlightbackground="#2563eb",
+                        highlightcolor="#2563eb",
+                        bg="#f0f7ff"
+                    )
+                    widget.selection_range(0, tk.END)
+                except Exception:
+                    pass
+            def _on_f_out(e):
+                try:
+                    widget.config(
+                        highlightthickness=1,
+                        highlightbackground="#ced4da",
+                        highlightcolor="#ced4da",
+                        bg="#ffffff"
+                    )
+                except Exception:
+                    pass
+            widget.bind("<FocusIn>", _on_f_in, add="+")
+            widget.bind("<FocusOut>", _on_f_out, add="+")
+
+        def apply_button_focus_style(button, ring_color="#ff9800", trigger_func=None):
+            """
+            Adds a bright high-visibility glowing ring border on focus to Buttons,
+            and binds Enter / Space to execute trigger_func or invoke the button.
+            """
+            button.config(
+                relief="raised",
+                bd=2,
+                highlightthickness=2,
+                highlightbackground="#ced4da",
+                highlightcolor=ring_color
+            )
+            def _on_btn_f_in(e):
+                try:
+                    button.config(
+                        relief="solid",
+                        highlightthickness=3,
+                        highlightbackground=ring_color,
+                        highlightcolor=ring_color
+                    )
+                except Exception:
+                    pass
+            def _on_btn_f_out(e):
+                try:
+                    button.config(
+                        relief="raised",
+                        highlightthickness=2,
+                        highlightbackground="#ced4da",
+                        highlightcolor=ring_color
+                    )
+                except Exception:
+                    pass
+            def _on_key_activate(e):
+                if trigger_func:
+                    trigger_func()
+                else:
+                    button.invoke()
+                return "break"
+
+            button.bind("<FocusIn>", _on_btn_f_in, add="+")
+            button.bind("<FocusOut>", _on_btn_f_out, add="+")
+            button.bind("<Return>", _on_key_activate)
+            button.bind("<KP_Enter>", _on_key_activate)
+            button.bind("<space>", _on_key_activate)
+
+        self._apply_entry_focus = apply_entry_focus_style
+        self._apply_btn_focus = apply_button_focus_style
+
         add_customer_btn = tk.Button(
             customer_frame,
             text="+ Add Customer",
@@ -573,10 +655,11 @@ class InvoiceUI:
             font=("Arial", 10, "bold")
         )
         add_customer_btn.pack(side="left", padx=4)
+        apply_button_focus_style(add_customer_btn, ring_color="#0066cc", trigger_func=self.open_customer_popup)
 
         clear_invoice_btn = tk.Button(
             customer_frame,
-            text="🧹 Clear / New Bill",
+            text="🧹 Clear / New Bill (Ctrl+N)",
             bg="#e9ecef",
             fg="#495057",
             activebackground="#dde2e6",
@@ -588,6 +671,7 @@ class InvoiceUI:
             command=self.clear_invoice
         )
         clear_invoice_btn.pack(side="left", padx=4)
+        apply_button_focus_style(clear_invoice_btn, ring_color="#dc3545", trigger_func=self.clear_invoice)
 
         # =========================
         # 2. PRODUCT SECTION (Compact & Fast)
@@ -612,7 +696,7 @@ class InvoiceUI:
         # Row 0: Product Search Dropdown & Live Stock Badge
         tk.Label(
             product_frame,
-            text="Product (F2):",
+            text="Product:",
             font=("Arial", 11, "bold")
         ).grid(row=0, column=0, padx=6, pady=3, sticky="w")
 
@@ -663,6 +747,7 @@ class InvoiceUI:
         tk.Label(product_frame, text="Qty:", font=("Arial", 10, "bold")).grid(row=1, column=0, padx=4, pady=3, sticky="w")
         self.qty_entry = tk.Entry(product_frame, width=6, font=("Arial", 11, "bold"), justify="center")
         self.qty_entry.grid(row=1, column=1, padx=4, pady=3, ipady=2, sticky="ew")
+        self._apply_entry_focus(self.qty_entry)
 
         tk.Label(product_frame, text="MRP:", font=("Arial", 10, "bold")).grid(row=1, column=2, padx=4, pady=3, sticky="w")
         self.mrp_entry = tk.Entry(product_frame, width=8, state="readonly", font=("Arial", 11, "bold"), justify="center")
@@ -671,6 +756,7 @@ class InvoiceUI:
         tk.Label(product_frame, text="Price:", font=("Arial", 10, "bold")).grid(row=1, column=4, padx=4, pady=3, sticky="w")
         self.price_entry = tk.Entry(product_frame, width=8, font=("Arial", 11, "bold"), justify="center")
         self.price_entry.grid(row=1, column=5, padx=4, pady=3, ipady=2, sticky="ew")
+        self._apply_entry_focus(self.price_entry)
 
         tk.Label(product_frame, text="Unit:", font=("Arial", 10, "bold")).grid(row=1, column=6, padx=4, pady=3, sticky="w")
         self.unit_entry = tk.Entry(product_frame, width=6, state="readonly", font=("Arial", 11, "bold"), justify="center")
@@ -683,6 +769,7 @@ class InvoiceUI:
         self.discount_entry = tk.Entry(product_frame, width=6, font=("Arial", 11, "bold"), justify="center")
         self.discount_entry.insert(0, "0")
         self.discount_entry.grid(row=2, column=1, padx=4, pady=3, ipady=2, sticky="ew")
+        self._apply_entry_focus(self.discount_entry)
 
         tk.Label(product_frame, text="Disc On:", font=("Arial", 10, "bold")).grid(row=2, column=2, padx=4, pady=3, sticky="w")
         self.discount_base_label = tk.Label(
@@ -708,21 +795,13 @@ class InvoiceUI:
             font=("Arial", 10, "bold")
         )
         self.add_btn.grid(row=2, column=4, columnspan=4, padx=6, pady=3, sticky="e")
-
-        self.add_btn.bind(
-            "<Return>",
-            lambda e: self.add_to_cart()
-        )
+        self._apply_btn_focus(self.add_btn, ring_color="#ffcc00", trigger_func=self.add_to_cart)
 
         # =========================
         # TALLY SEAMLESS KEYBOARD NAVIGATION LOOP
         # =========================
         self.customer_combo.entry.bind("<Return>", self.on_customer_enter_pressed)
         self.customer_combo.bind("<<ComboboxSelected>>", self.on_customer_enter_pressed)
-
-        # Auto-Select-All on FocusIn for rapid overwrite
-        for entry_w in (self.qty_entry, self.price_entry, self.discount_entry):
-            entry_w.bind("<FocusIn>", lambda e, w=entry_w: w.selection_range(0, tk.END))
 
         # Enter advances to next field seamlessly
         self.qty_entry.bind(
@@ -890,6 +969,7 @@ class InvoiceUI:
         )
         self.paid_entry.insert(0, "0")
         self.paid_entry.pack(side="left", padx=4)
+        self._apply_entry_focus(self.paid_entry)
 
         self.paid_entry.bind(
             "<KeyRelease>",
@@ -900,12 +980,8 @@ class InvoiceUI:
             lambda e: self.update_pending()
         )
         self.paid_entry.bind(
-            "<FocusIn>",
-            lambda e: self.paid_entry.selection_range(0, tk.END)
-        )
-        self.paid_entry.bind(
             "<Return>",
-            lambda e: self.save_invoice()
+            lambda e: (self.note_text.focus_set(), self.note_text.selection_range(0, tk.END))
         )
 
         self.pending_label = tk.Label(
@@ -930,13 +1006,10 @@ class InvoiceUI:
             width=26
         )
         self.note_text.pack(side="left", fill="x", expand=True, padx=4)
-        self.note_text.bind(
-            "<FocusIn>",
-            lambda e: self.note_text.selection_range(0, tk.END)
-        )
+        self._apply_entry_focus(self.note_text)
         self.note_text.bind(
             "<Return>",
-            lambda e: self.save_invoice()
+            lambda e: self.save_thermal_btn.focus_set()
         )
 
         # Line 2: Save Invoice Buttons (Thermal & A4), Clear Button & Branding
@@ -946,7 +1019,7 @@ class InvoiceUI:
         # Default 80mm Thermal Receipt Button (Primary - Indigo Accent)
         self.save_thermal_btn = tk.Button(
             line2,
-            text="🖨️ Save & Print 80mm Receipt (Default - F9)",
+            text="🖨️ Save & Print 80mm Receipt (Ctrl+P)",
             command=lambda: self.save_invoice(format_type="thermal"),
             fg="white",
             bg="#5634f0",
@@ -958,11 +1031,12 @@ class InvoiceUI:
             font=("Arial", 10, "bold")
         )
         self.save_thermal_btn.pack(side="left", padx=(4, 6))
+        self._apply_btn_focus(self.save_thermal_btn, ring_color="#ffcc00", trigger_func=lambda: self.save_invoice(format_type="thermal"))
 
         # Secondary A4 PDF Button (Emerald Accent)
         self.save_a4_btn = tk.Button(
             line2,
-            text="📄 Save & Print A4 PDF (Ctrl+P)",
+            text="📄 Save & Print A4 PDF (Ctrl+J)",
             command=lambda: self.save_invoice(format_type="a4"),
             fg="white",
             bg="#28a745",
@@ -974,10 +1048,11 @@ class InvoiceUI:
             font=("Arial", 10, "bold")
         )
         self.save_a4_btn.pack(side="left", padx=4)
+        self._apply_btn_focus(self.save_a4_btn, ring_color="#ffcc00", trigger_func=lambda: self.save_invoice(format_type="a4"))
 
-        clear_btn = tk.Button(
+        self.clear_btn = tk.Button(
             line2,
-            text="🧹 Clear / New Bill (Alt+X)",
+            text="🧹 Clear / New Bill (Ctrl+N)",
             command=self.clear_invoice,
             fg="#495057",
             bg="#e9ecef",
@@ -988,7 +1063,8 @@ class InvoiceUI:
             pady=4,
             font=("Arial", 10, "bold")
         )
-        clear_btn.pack(side="left", padx=6)
+        self.clear_btn.pack(side="left", padx=6)
+        self._apply_btn_focus(self.clear_btn, ring_color="#dc3545", trigger_func=self.clear_invoice)
 
         branding_label = tk.Label(
             line2,
@@ -1002,6 +1078,22 @@ class InvoiceUI:
         self.auto_fill_paid = True
         self.restore_state()
         self._bind_tally_shortcuts()
+
+
+
+
+    def _bind_tally_shortcuts(self):
+        """Binds global keyboard shortcuts for fast POS billing."""
+        try:
+            top = self.frame.winfo_toplevel()
+            top.bind("<Control-p>", lambda e: (self.save_invoice(format_type="thermal"), "break")[1])
+            top.bind("<Control-P>", lambda e: (self.save_invoice(format_type="thermal"), "break")[1])
+            top.bind("<Control-j>", lambda e: (self.save_invoice(format_type="a4"), "break")[1])
+            top.bind("<Control-J>", lambda e: (self.save_invoice(format_type="a4"), "break")[1])
+            top.bind("<Control-n>", lambda e: (self.clear_invoice(), "break")[1])
+            top.bind("<Control-N>", lambda e: (self.clear_invoice(), "break")[1])
+        except Exception:
+            pass
 
 
 

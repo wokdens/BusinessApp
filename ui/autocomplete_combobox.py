@@ -21,13 +21,16 @@ class AutocompleteCombobox(tk.Frame):
         self.placeholder = placeholder
         self._font = font
 
-        # Main Entry Field
+        # Main Entry Field with High-Visibility Focus Highlight
         self.entry = tk.Entry(
             self,
             width=width,
             font=font,
             relief="solid",
             bd=1,
+            highlightthickness=1,
+            highlightbackground="#ced4da",
+            highlightcolor="#2563eb",
             bg="#ffffff",
             fg="#212529"
         )
@@ -44,17 +47,19 @@ class AutocompleteCombobox(tk.Frame):
         self._return_callbacks = []
         self._selection_callbacks = []
         self._focusout_callbacks = []
+        self._focusin_callbacks = []
 
         # Internal Bindings on Entry
         self.entry.bind("<KeyRelease>", self._on_key_release)
         self.entry.bind("<Down>", self._on_down_arrow)
         self.entry.bind("<Up>", self._on_up_arrow)
-        self.entry.bind("<Tab>", self._on_tab_key)
-        self.entry.bind("<Shift-Tab>", self._on_shift_tab_key)
+        self.entry.bind("<Tab>", lambda e: self.hide_popup())
+        self.entry.bind("<Shift-Tab>", lambda e: self.hide_popup())
 
         self.entry.bind("<Return>", self._on_enter_pressed)
         self.entry.bind("<KP_Enter>", self._on_enter_pressed)
         self.entry.bind("<Escape>", lambda e: self.hide_popup())
+        self.entry.bind("<FocusIn>", self._on_entry_focus_in)
         self.entry.bind("<FocusOut>", self._on_entry_focus_out)
         self.entry.bind("<Button-1>", self._on_entry_clicked)
 
@@ -432,8 +437,35 @@ class AutocompleteCombobox(tk.Frame):
                 self.listbox.selection_set(idx)
                 self.listbox.activate(idx)
 
+    def _on_entry_focus_in(self, event):
+        """Highlight entry with high-visibility blue border on focus."""
+        try:
+            self.entry.config(
+                highlightthickness=2,
+                highlightbackground="#2563eb",
+                highlightcolor="#2563eb",
+                bg="#f0f7ff"
+            )
+            self.entry.selection_range(0, tk.END)
+        except Exception:
+            pass
+        for cb in list(self._focusin_callbacks):
+            try:
+                cb(event)
+            except Exception:
+                pass
+
     def _on_entry_focus_out(self, event):
-        """Close popup when focus leaves after a short delay (allows mouse clicks to register)."""
+        """Close popup and restore normal entry styling when focus leaves."""
+        try:
+            self.entry.config(
+                highlightthickness=1,
+                highlightbackground="#ced4da",
+                highlightcolor="#ced4da",
+                bg="#ffffff"
+            )
+        except Exception:
+            pass
         self.after(180, self._check_focus_loss)
         for cb in list(self._focusout_callbacks):
             try:
