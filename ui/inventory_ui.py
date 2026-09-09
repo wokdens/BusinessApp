@@ -1232,44 +1232,97 @@ class InventoryUI:
             return
 
         file_path = filedialog.askopenfilename(
-            title="Select CSV File",
-            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+            title="Select Inventory CSV or ODS File",
+            filetypes=[
+                ("Supported Spreadsheets (*.csv, *.ods)", "*.csv;*.ods"),
+                ("CSV Files (*.csv)", "*.csv"),
+                ("OpenDocument Spreadsheets (*.ods)", "*.ods"),
+                ("All Files (*.*)", "*.*")
+            ]
         )
 
         if not file_path:
             return
 
         try:
-            # 1. Multi-Encoding Auto-Detector (Handles Windows-1252, Excel UTF-8 with BOM, Latin-1, ANSI)
-            raw_text = None
-            encodings_to_try = ["utf-8-sig", "utf-8", "cp1252", "windows-1252", "latin-1", "iso-8859-1", "utf-16"]
-            for enc in encodings_to_try:
-                try:
-                    with open(file_path, "r", encoding=enc) as f:
+            dict_rows = []
+
+            # Check if OpenDocument Spreadsheet (.ods)
+            if file_path.lower().endswith(".ods"):
+                import zipfile
+                import xml.etree.ElementTree as ET
+                with zipfile.ZipFile(file_path, 'r') as z:
+                    with z.open('content.xml') as f:
+                        tree = ET.parse(f)
+                        root = tree.getroot()
+
+                ns = {
+                    'table': 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
+                    'text': 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
+                }
+
+                all_extracted = []
+                for table in root.findall('.//table:table', ns):
+                    for row in table.findall('.//table:table-row', ns):
+                        row_cells = []
+                        for cell in row.findall('.//table:table-cell', ns):
+                            rep = int(cell.attrib.get('{urn:oasis:names:tc:opendocument:xmlns:table:1.0}number-columns-repeated', 1))
+                            texts = [t.text for t in cell.findall('.//text:p', ns) if t.text]
+                            val = ' '.join(texts) if texts else ''
+                            for _ in range(min(rep, 30)):
+                                row_cells.append(val)
+                        while row_cells and not row_cells[-1]:
+                            row_cells.pop()
+                        if any(row_cells):
+                            all_extracted.append(row_cells)
+
+                if all_extracted:
+                    headers = [str(h).strip().lstrip('\ufeff').lower() for h in all_extracted[0]]
+                    for raw_cells in all_extracted[1:]:
+                        row_dict = {}
+                        for idx, h in enumerate(headers):
+                            val = raw_cells[idx] if idx < len(raw_cells) else ''
+                            row_dict[h] = val
+                        dict_rows.append(row_dict)
+            else:
+                # 1. Multi-Encoding Auto-Detector (Handles Windows-1252, Excel UTF-8 with BOM, Latin-1, ANSI)
+                raw_text = None
+                encodings_to_try = ["utf-8-sig", "utf-8", "cp1252", "windows-1252", "latin-1", "iso-8859-1", "utf-16"]
+                for enc in encodings_to_try:
+                    try:
+                        with open(file_path, "r", encoding=enc) as f:
+                            raw_text = f.read()
+                        break
+                    except (UnicodeDecodeError, UnicodeError):
+                        continue
+
+                if raw_text is None:
+                    # Resilient fallback with character replacement
+                    with open(file_path, "r", encoding="latin-1", errors="replace") as f:
                         raw_text = f.read()
-                    break
-                except (UnicodeDecodeError, UnicodeError):
-                    continue
 
-            if raw_text is None:
-                # Resilient fallback with character replacement
-                with open(file_path, "r", encoding="latin-1", errors="replace") as f:
-                    raw_text = f.read()
+                import io
+                csvfile = io.StringIO(raw_text)
 
-            import io
-            csvfile = io.StringIO(raw_text)
-
-            # 2. Dynamic Delimiter Sniffer (Comma, Semicolon, Tab, Pipe)
-            sample = raw_text[:2048]
-            delimiter = ","
-            try:
-                sniffer = csv.Sniffer()
-                dialect = sniffer.sniff(sample, delimiters=",\t;|")
-                delimiter = dialect.delimiter
-            except Exception:
+                # 2. Dynamic Delimiter Sniffer (Comma, Semicolon, Tab, Pipe)
+                sample = raw_text[:2048]
                 delimiter = ","
+                try:
+                    sniffer = csv.Sniffer()
+                    dialect = sniffer.sniff(sample, delimiters=",\t;|")
+                    delimiter = dialect.delimiter
+                except Exception:
+                    delimiter = ","
 
-            reader = csv.DictReader(csvfile, delimiter=delimiter)
+                reader = csv.DictReader(csvfile, delimiter=delimiter)
+                for raw_row in reader:
+                    if raw_row:
+                        dict_rows.append({
+                            str(k).strip().lstrip('\ufeff').lower(): v
+                            for k, v in raw_row.items()
+                            if k is not None
+                        })
+
             conn = get_connection()
             cursor = conn.cursor()
 
@@ -1277,17 +1330,10 @@ class InventoryUI:
             updated_count = 0
             skipped_count = 0
 
-            for raw_row in reader:
-                if not raw_row:
+            for row in dict_rows:
+                if not row:
                     skipped_count += 1
                     continue
-
-                # Normalize keys: lowercase and stripped of BOM / whitespace
-                row = {
-                    str(k).strip().lstrip('\ufeff').lower(): v
-                    for k, v in raw_row.items()
-                    if k is not None
-                }
 
                 category = (
                     row.get("category") or
@@ -1321,14 +1367,14 @@ class InventoryUI:
 
                 # Clean and parse Purchase Price
                 try:
-                    pp_str = str(row.get("purchase price") or row.get("purchase_price") or row.get("cost price") or row.get("cost") or row.get("buy price") or 0).replace(",", "").strip()
+                    pp_str = str(row.get("purchase price") or row.get("purchase_price") or row.get("purchase") or row.get("cost price") or row.get("cost") or row.get("buy price") or row.get("buy") or 0).replace(",", "").strip()
                     purchase_price = float(pp_str)
                 except (ValueError, TypeError):
                     purchase_price = 0.0
 
                 # Clean and parse Selling Price
                 try:
-                    sp_str = str(row.get("selling price") or row.get("selling_price") or row.get("sale price") or row.get("rate") or row.get("price") or 0).replace(",", "").strip()
+                    sp_str = str(row.get("selling price") or row.get("selling_price") or row.get("selling") or row.get("sale price") or row.get("sale") or row.get("rate") or row.get("price") or 0).replace(",", "").strip()
                     selling_price = float(sp_str)
                 except (ValueError, TypeError):
                     selling_price = 0.0
@@ -1349,7 +1395,7 @@ class InventoryUI:
 
                 # Ensure category exists in categories table
                 try:
-                    add_category(category)
+                    cursor.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (category,))
                 except Exception:
                     pass
 
